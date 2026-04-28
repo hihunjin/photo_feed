@@ -133,6 +133,8 @@ By following these implementation steps, you can create a functional and efficie
          ```bash
          synopkg list
          synopkg install /path/to/package.spk
+         # or synopkg install_from_server ...
+         synopkg install_from_server ContainerManager # Docker for DSM 7.2+
          synopkg start <package-name>
          synopkg stop <package-name>
          synopkg status <package-name>
