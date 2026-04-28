@@ -147,3 +147,22 @@ By following these implementation steps, you can create a functional and efficie
      - 운영(NAS): 빈번한 메모리 테스트와 모니터링이 필요하면 bare process로 우선 배포
      - Docker는 메모리/성능 벤치마크에서 이득이 확인될 때 도입
 
+
+
+* Add theme color.
+  * color series?
+  * also add dark mode and light mode and auto. default is light mode.
+
+* Add taps. Bands, Feeds, Photo Albums.
+* I don't think the thumbnail is not working.
+* Add Edit button on bands, Feeds, photo albums. to all users.
+* On feeds tap, show at most three photos of thumbnails.
+* when on feeds, then make urls with band name and the feed in it.
+  * because when I click backward button, I want to make the frontend click "back" button. "the same work".
+  * if there's a better way to keep all in-memory state, then please do it.
+* comment is not showing on each feed.
+  * when comment, I want to see it right away without any refresh.
+* bug
+  * currently on existing feed, adding and deleting photos is not working.
+* when choose a photo, then upload it right away. show the loading circle on each photo.
+  * save button is always active. when click "save" button, really "save" when the whole photos are uploaded.
