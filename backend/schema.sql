@@ -101,11 +101,11 @@ CREATE TABLE IF NOT EXISTS upload_policies (
   FOREIGN KEY (updated_by) REFERENCES users(id)
 );
 
--- Unique Photos Table (Hash table for avoiding duplicates)
 CREATE TABLE IF NOT EXISTS unique_photos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   hash TEXT UNIQUE NOT NULL,
   original_path TEXT NOT NULL,
+  thumb_path TEXT,
   width INTEGER,
   height INTEGER,
   size INTEGER,
