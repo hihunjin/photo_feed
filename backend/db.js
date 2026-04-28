@@ -29,11 +29,16 @@ function initialize() {
 function performInitialize(resolve, reject) {
   const dbPath = process.env.DATABASE || path.join(__dirname, '../data/photo_feed.sqlite3');
   
-  // Ensure data directory exists and is writable
+  // Ensure data directory and sub-folders exist and are writable
   const dataDir = path.dirname(dbPath);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
+  const originalsDir = path.join(dataDir, 'originals');
+  const thumbnailsDir = path.join(dataDir, 'thumbnails');
+  
+  [dataDir, originalsDir, thumbnailsDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
   
   // Delete old db if it exists in test mode
   if (process.env.NODE_ENV === 'test' && fs.existsSync(dbPath)) {
