@@ -18,4 +18,3 @@ services:
     restart: unless-stopped
     # Limited RAM optimization (512MB for 1GB NAS)
     mem_limit: 512m
-    cpus: '1.0'
