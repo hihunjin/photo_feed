@@ -167,10 +167,15 @@ chmod -R 755 data
 ### 3-1) NAS에서 직접 빌드 및 실행
 ```bash
 ssh admin@NAS_IP
+
+# root 권한 획득 (권장)
+sudo -i
+
 cd /volume1/photo_feed
 
 # docker-compose.yml의 명령이 자동으로 npm ci와 app 시작을 수행
-docker-compose up -d
+docker-compose up -d --build
+```
 
 # 로그 확인
 docker-compose logs -f photo_feed
@@ -217,6 +222,7 @@ docker-compose down  # 완전 제거
 ```bash
 synopkg list
 synopkg install /path/to/package.spk
+# or synopkg install_from_server ...
 synopkg start <package-name>
 synopkg stop <package-name>
 synopkg status <package-name>
@@ -228,9 +234,9 @@ synopkg status <package-name>
 ## 6. 권장 배포 흐름 요약 (Git + Docker Compose)
 1. macOS에서 개발 및 테스트 (`npm run dev`)
 2. 변경사항을 Git에 push
-3. NAS에서 SSH 접속 후 git clone
-4. NAS에서 docker-compose.yml 수정 (.env 파일 설정)
-5. `docker-compose up -d` 실행 (자동으로 npm ci와 app 시작)
+3. NAS에서 SSH 접속 후 `sudo -i`로 root 권한 획득
+4. `cd /volume1` 후 `git clone https://github.com/hihunjin/photo_feed`
+5. `cd photo_feed` 후 `docker-compose up -d --build` 실행
 6. `docker-compose logs` 또는 Container Manager GUI에서 모니터링
 
 ---

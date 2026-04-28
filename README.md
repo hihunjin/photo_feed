@@ -60,6 +60,7 @@ If you need to install Synology packages from the Linux shell, use SSH and `syno
 ```bash
 synopkg list
 synopkg install /path/to/package.spk
+# or synopkg install_from_server ...
 synopkg start <package-name>
 synopkg stop <package-name>
 synopkg status <package-name>
@@ -262,4 +263,12 @@ npm run dev
 2. **Production Build**: `npm run build` to generate `dist/`; copy to `backend/public/` for deployment
 3. **Styling**: Enhance UI with custom CSS or Tailwind
 4. **Performance**: Profile thumbnail queue under load; benchmark memory usage on 1GB NAS
-5. **Docker (Optional)**: Add Dockerfile if barebone process monitoring is insufficient**
+5. **Synology NAS Deployment**:
+   - Access the NAS via SSH: `ssh admin@NAS_IP`
+   - **Crucial**: Switch to root user: `sudo -i`
+   - Navigate to the storage volume: `cd /volume1`
+   - Clone the repository: `git clone https://github.com/hihunjin/photo_feed`
+   - Start with Docker: `cd photo_feed && docker-compose up -d --build`
+   - Access the app at: `http://NAS_IP:8081`
+
+**
