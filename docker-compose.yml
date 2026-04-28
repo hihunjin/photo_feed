@@ -9,7 +9,7 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./data:/app/data
+      - photo_data:/app/data
     environment:
       - NODE_ENV=production
       - PORT=8081
@@ -18,3 +18,6 @@ services:
     restart: unless-stopped
     # Limited RAM optimization (512MB for 1GB NAS)
     mem_limit: 512m
+
+volumes:
+  photo_data:
