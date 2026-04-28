@@ -26,10 +26,10 @@ COPY --from=frontend-builder /build/frontend/dist ./public
 # Create data directory for persistence
 RUN mkdir -p data/originals data/thumbnails
 
-EXPOSE 3000
+EXPOSE 8081
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8081
 ENV DATABASE=/app/data/photo_feed.sqlite3
 
 CMD ["node", "index.js"]

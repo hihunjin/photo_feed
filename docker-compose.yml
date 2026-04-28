@@ -7,12 +7,12 @@ services:
       dockerfile: Dockerfile
     container_name: photo_feed
     ports:
-      - "8081:3000"
+      - "8081:8081"
     volumes:
       - ./data:/app/data
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=8081
       - DATABASE=/app/data/photo_feed.sqlite3
       - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-me}
     restart: unless-stopped
