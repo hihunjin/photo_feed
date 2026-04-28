@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  photo_feed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: photo_feed
+    ports:
+      - "8081:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE=/app/data/photo_feed.sqlite3
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-me}
+    restart: unless-stopped
+    # Limited RAM optimization (512MB for 1GB NAS)
+    mem_limit: 512m
+    cpus: '1.0'

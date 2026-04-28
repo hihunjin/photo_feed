@@ -34,6 +34,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Catch-all route to serve the frontend
+app.get('*', (req, res, next) => {
+  // If the request is for an API or media, don't serve index.html
+  if (req.url.startsWith('/api') || req.url.startsWith('/media')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
