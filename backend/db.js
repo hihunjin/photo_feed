@@ -99,15 +99,22 @@ function performInitialize(resolve, reject) {
                   if (err && err.code !== 'SQLITE_CONSTRAINT') {
                     console.error('Policy initialization error:', err);
                   }
-                  isInitialized = true;
-                  console.log('✓ Database initialized successfully');
-                  seedDevUsers().then(() => resolve(db)).catch(() => resolve(db));
+                  
+                  // Run migrations for existing databases
+                  runMigrations().then(() => {
+                    isInitialized = true;
+                    console.log('✓ Database initialized successfully');
+                    seedDevUsers().then(() => resolve(db)).catch(() => resolve(db));
+                  }).catch(reject);
                 }
               );
             } else {
-              isInitialized = true;
-              console.log('✓ Database initialized successfully');
-              seedDevUsers().then(() => resolve(db)).catch(() => resolve(db));
+              // Run migrations even if policy exists
+              runMigrations().then(() => {
+                isInitialized = true;
+                console.log('✓ Database initialized successfully');
+                seedDevUsers().then(() => resolve(db)).catch(() => resolve(db));
+              }).catch(reject);
             }
           });
         });
@@ -277,6 +284,35 @@ function getInstance() {
     throw new Error('Database not initialized');
   }
   return db;
+}
+
+/**
+ * Ensures that necessary columns exist in the database (simple migration system)
+ */
+async function runMigrations() {
+  const tables = ['feed_photos', 'album_photos'];
+  for (const table of tables) {
+    try {
+      // Check if unique_photo_id exists
+      const columns = await new Promise((res, rej) => {
+        db.all(`PRAGMA table_info(${table})`, (err, rows) => {
+          if (err) rej(err); else res(rows);
+        });
+      });
+      
+      const hasUniquePhotoId = columns.some(c => c.name === 'unique_photo_id');
+      if (!hasUniquePhotoId) {
+        console.log(`Adding missing column unique_photo_id to ${table}`);
+        await new Promise((res, rej) => {
+          db.run(`ALTER TABLE ${table} ADD COLUMN unique_photo_id INTEGER REFERENCES unique_photos(id) ON DELETE SET NULL`, (err) => {
+            if (err) rej(err); else res();
+          });
+        });
+      }
+    } catch (err) {
+      console.error(`Migration error for table ${table}:`, err);
+    }
+  }
 }
 
 module.exports = {

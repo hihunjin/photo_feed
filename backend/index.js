@@ -4,20 +4,9 @@ const compression = require('compression');
 const cors = require('cors');
 const path = require('path');
 const db = require('./db');
-
 const { startWorker } = require('./services/thumbnailWorker');
 
-// Initialize database
-db.initialize();
-
-// Initialize Express app
 const app = express();
-
-// Start background worker
-if (require.main === module) {
-  startWorker();
-}
-
 // Middleware
 app.use(compression());
 app.use(cors());
@@ -66,9 +55,21 @@ app.use((err, req, res, next) => {
 // Start server only when run directly
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`✓ Server running on port ${PORT}`);
-  });
+  
+  async function start() {
+    try {
+      await db.initialize();
+      startWorker();
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`✓ Server running on port ${PORT}`);
+      });
+    } catch (err) {
+      console.error('Failed to start server:', err);
+      process.exit(1);
+    }
+  }
+  
+  start();
 }
 
 module.exports = app;
