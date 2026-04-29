@@ -18,6 +18,9 @@ albumRouter.get('/:albumId', albumController.getAlbumById);
 albumRouter.patch('/:albumId', authMiddleware, albumController.updateAlbum);
 albumRouter.delete('/:albumId', authMiddleware, albumController.deleteAlbum);
 
+// POST /albums/:albumId/photos/to-feed - Copy photos to a feed (protected)
+albumRouter.post('/:albumId/photos/to-feed', authMiddleware, albumController.copyPhotosToFeed);
+
 module.exports = {
 	default: router,
 	albumRouter

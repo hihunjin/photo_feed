@@ -111,9 +111,9 @@ async function createAlbum(req, res) {
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         await db.query(
-          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order) 
-           VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
-          [createdAlbum.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index]
+          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [createdAlbum.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index, savedFile.uniquePhotoId]
         );
       }
 
@@ -189,10 +189,90 @@ async function deleteAlbum(req, res) {
   }
 }
 
+async function copyPhotosToFeed(req, res) {
+  try {
+    const { albumId } = req.params;
+    const { photoIds, feedId, newFeedText } = req.body;
+    const userId = req.user.id;
+
+    if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+      return res.status(400).json({ error: 'No photos selected' });
+    }
+
+    // Verify album exists
+    const album = await db.query(`SELECT band_id FROM albums WHERE id = ?`, [albumId]);
+    if (album.length === 0) return res.status(404).json({ error: 'Album not found' });
+    const bandId = album[0].band_id;
+
+    let targetFeedId = feedId;
+
+    // Create new feed if requested
+    if (!targetFeedId && newFeedText) {
+      const previewText = newFeedText.length > 200 ? newFeedText.substring(0, 200) : newFeedText;
+      const feedRes = await db.query(
+        `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count) VALUES (?, ?, ?, ?, 0) RETURNING id`,
+        [bandId, userId, newFeedText, previewText]
+      );
+      targetFeedId = feedRes[0].id;
+    }
+
+    if (!targetFeedId) {
+      return res.status(400).json({ error: 'Feed ID or new text required' });
+    }
+
+    // Get unique_photo_ids for the selected photos
+    const photos = await db.query(
+      `SELECT * FROM album_photos WHERE album_id = ? AND id IN (${photoIds.map(() => '?').join(',')})`,
+      [albumId, ...photoIds]
+    );
+
+    if (photos.length === 0) {
+      return res.status(404).json({ error: 'Photos not found' });
+    }
+
+    // Get next sort_order for the target feed
+    const maxOrderRes = await db.query(
+      `SELECT COALESCE(MAX(sort_order), -1) as max_order FROM feed_photos WHERE feed_id = ?`,
+      [targetFeedId]
+    );
+    let nextOrder = maxOrderRes[0].max_order + 1;
+
+    // Copy to feed_photos
+    for (const photo of photos) {
+      // Check if already in feed
+      const exists = await db.query(
+        `SELECT id FROM feed_photos WHERE feed_id = ? AND unique_photo_id = ?`,
+        [targetFeedId, photo.unique_photo_id]
+      );
+
+      if (exists.length === 0) {
+        await db.query(
+          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [targetFeedId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id]
+        );
+      }
+    }
+
+    // Update photo_count
+    const countRes = await db.query(`SELECT COUNT(*) as count FROM feed_photos WHERE feed_id = ?`, [targetFeedId]);
+    await db.query(
+      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [countRes[0].count, targetFeedId]
+    );
+
+    res.status(201).json({ success: true, feedId: targetFeedId });
+  } catch (err) {
+    console.error('Error copying photos to feed:', err);
+    res.status(500).json({ error: 'Failed to copy photos' });
+  }
+}
+
 module.exports = {
   getAllAlbums,
   getAlbumById,
   createAlbum,
   updateAlbum,
-  deleteAlbum
+  deleteAlbum,
+  copyPhotosToFeed
 };

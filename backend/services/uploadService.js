@@ -134,9 +134,10 @@ async function saveUploadedFiles({ files, prefix, targetId }) {
         fileName: path.basename(record.original_path),
         originalFsPath: path.join(ORIGINALS_DIR, path.basename(record.original_path)),
         originalUrl: record.original_path,
-        thumbnailUrl: record.original_path, // No separate thumbnail
+        thumbnailUrl: record.thumb_path || record.original_path,
         mimetype: record.mimetype,
         size: record.size,
+        uniquePhotoId: record.id,
         isDuplicate: true
       });
       continue;
@@ -145,18 +146,26 @@ async function saveUploadedFiles({ files, prefix, targetId }) {
     await fs.writeFile(originalFsPath, file.buffer);
 
     // Record in unique_photos
+    const insertRes = await db.query(
+      'INSERT INTO unique_photos (hash, original_path, thumb_path, size, mimetype) VALUES (?, ?, ?, ?, ?) RETURNING id',
+      [hash, originalUrl, null, file.size, file.mimetype]
+    );
+    const uniqueId = insertRes[0].id;
+
+    // Enqueue thumbnail job
     await db.query(
-      'INSERT INTO unique_photos (hash, original_path, thumb_path, size, mimetype) VALUES (?, ?, ?, ?, ?)',
-      [hash, originalUrl, originalUrl, file.size, file.mimetype]
+      `INSERT INTO thumbnail_jobs (target_type, target_id, status) VALUES (?, ?, ?)`,
+      ['unique_photo', uniqueId, 'queued']
     );
 
     savedFiles.push({
       fileName,
       originalFsPath,
       originalUrl,
-      thumbnailUrl: originalUrl, // No separate thumbnail
+      thumbnailUrl: originalUrl, // Will be updated by background worker
       mimetype: file.mimetype,
       size: file.size,
+      uniquePhotoId: uniqueId,
       isDuplicate: false
     });
   }

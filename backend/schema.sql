@@ -72,8 +72,10 @@ CREATE TABLE IF NOT EXISTS feed_photos (
   width INTEGER,
   height INTEGER,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  unique_photo_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE
+  FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
+  FOREIGN KEY (unique_photo_id) REFERENCES unique_photos(id) ON DELETE SET NULL
 );
 
 -- Album Photos Table
@@ -85,8 +87,10 @@ CREATE TABLE IF NOT EXISTS album_photos (
   width INTEGER,
   height INTEGER,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  unique_photo_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE
+  FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
+  FOREIGN KEY (unique_photo_id) REFERENCES unique_photos(id) ON DELETE SET NULL
 );
 
 -- Upload Policies Table
@@ -111,6 +115,18 @@ CREATE TABLE IF NOT EXISTS unique_photos (
   size INTEGER,
   mimetype TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS thumbnail_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_type TEXT NOT NULL CHECK(target_type IN ('feed_photo','album_photo','unique_photo')),
+  target_id INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('queued','processing','done','failed')) DEFAULT 'queued',
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error_message TEXT,
+  queued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  started_at TEXT,
+  finished_at TEXT
 );
 
 -- Create Indexes

@@ -13,7 +13,7 @@ export default function FeedCard({ feed, onOpen }) {
 
       {/* Up to 3 photo thumbnails */}
       {previews.length > 0 && (
-        <div className="photo-grid" style={{ marginBottom: 8 }}>
+        <div className="photo-grid" style={{ marginBottom: 12 }}>
           {previews.map((photo) => (
             <img
               key={photo.id}
@@ -21,10 +21,13 @@ export default function FeedCard({ feed, onOpen }) {
               src={photo.thumb_path || photo.original_path}
               alt="preview"
               style={{ width: 64, height: 64 }}
+              loading="lazy"
             />
           ))}
           {feed.photo_count > 3 && (
-            <span className="photo-thumb-more">+{feed.photo_count - 3}</span>
+            <div className="photo-thumb-more" style={{ width: 64, height: 64 }}>
+              +{feed.photo_count - 3}
+            </div>
           )}
         </div>
       )}

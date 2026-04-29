@@ -5,6 +5,8 @@ import { usePagination } from '../hooks/usePagination';
 import BandSelector from '../components/BandSelector';
 import CommentSection from '../components/CommentSection';
 import EditModal from '../components/EditModal';
+import PhotoLightbox from '../components/PhotoLightbox';
+import CrossLinkModal from '../components/CrossLinkModal';
 
 export default function AlbumsPage({ user, selectedBand, onSelectBand }) {
   const navigate = useNavigate();
@@ -17,15 +19,15 @@ export default function AlbumsPage({ user, selectedBand, onSelectBand }) {
   return (
     <Routes>
       <Route index element={<AlbumListView selectedBand={selectedBand} onSelectBand={handleSelectBand} />} />
-      <Route path=":albumId" element={<AlbumDetailWrapper onBackPath=".." />} />
+      <Route path=":albumId" element={<AlbumDetailWrapper onBackPath=".." selectedBand={selectedBand} />} />
     </Routes>
   );
 }
 
-function AlbumDetailWrapper({ onBackPath }) {
+function AlbumDetailWrapper({ onBackPath, selectedBand }) {
   const { albumId } = useParams();
   const navigate = useNavigate();
-  return <AlbumDetailView albumId={albumId} onBack={() => navigate(onBackPath)} />;
+  return <AlbumDetailView albumId={albumId} onBack={() => navigate(onBackPath)} selectedBand={selectedBand} />;
 }
 
 /* ── Album List ── */
@@ -177,10 +179,18 @@ function AlbumListView({ selectedBand, onSelectBand }) {
 }
 
 /* ── Album Detail ── */
-function AlbumDetailView({ albumId, onBack }) {
+function AlbumDetailView({ albumId, onBack, selectedBand }) {
   const [album, setAlbum] = useState(null);
   const [comments, setComments] = useState([]);
   const [error, setError] = useState('');
+
+  // Lightbox state
+  const [lightboxIndex, setLightboxIndex] = useState(null);
+
+  // Selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState([]);
+  const [actionModalOpen, setActionModalOpen] = useState(false);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -210,6 +220,34 @@ function AlbumDetailView({ albumId, onBack }) {
     setEditing(true);
   }
 
+  async function handleCrossLinkSuccess(data) {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/albums/${albumId}/photos/to-feed`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          photoIds: selectedPhotoIds,
+          feedId: data.targetId,
+          newFeedText: data.newText
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to copy');
+
+      alert('Photos posted to feed successfully!');
+      setActionModalOpen(false);
+      setSelectionMode(false);
+      setSelectedPhotoIds([]);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   async function handleSaveEdit() {
     setSaving(true);
     try {
@@ -237,8 +275,30 @@ function AlbumDetailView({ albumId, onBack }) {
           <h2 className="section-title" style={{ margin: 0 }}>{album.title}</h2>
           <span className="badge">{album.photo_count || 0} photos</span>
         </div>
-        <button className="btn btn-ghost btn-sm" onClick={openEdit} title="Edit album">✏️ Edit</button>
+        <div className="row" style={{ gap: 8 }}>
+          <button 
+            className={`btn btn-sm ${selectionMode ? 'btn-primary' : 'btn-ghost'}`} 
+            onClick={() => {
+              setSelectionMode(!selectionMode);
+              setSelectedPhotoIds([]);
+            }}
+          >
+            {selectionMode ? 'Done' : 'Select'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={openEdit} title="Edit album">✏️ Edit</button>
+        </div>
       </div>
+
+      {selectionMode && selectedPhotoIds.length > 0 && (
+        <div className="selection-toolbar card fade-in" style={{ padding: '10px 20px', marginBottom: 10 }}>
+          <div className="row-between">
+            <span>{selectedPhotoIds.length} photo(s) selected</span>
+            <button className="btn btn-primary btn-sm" onClick={() => setActionModalOpen(true)}>
+              Post to Feed
+            </button>
+          </div>
+        </div>
+      )}
 
       {album.description && (
         <p className="muted">{album.description}</p>
@@ -246,17 +306,63 @@ function AlbumDetailView({ albumId, onBack }) {
 
       {Array.isArray(album.photos) && album.photos.length > 0 ? (
         <div className="photo-grid">
-          {album.photos.map((photo) => (
-            <a key={photo.id} href={photo.original_path} target="_blank" rel="noreferrer">
-              <img className="photo-thumb" src={photo.thumb_path || photo.original_path} alt="album photo" />
-            </a>
-          ))}
+          {album.photos.map((photo, index) => {
+            const isSelected = selectedPhotoIds.includes(photo.id);
+            return (
+              <div 
+                key={photo.id} 
+                className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
+                onClick={() => {
+                  if (selectionMode) {
+                    setSelectedPhotoIds(prev => 
+                      prev.includes(photo.id) 
+                        ? prev.filter(id => id !== photo.id) 
+                        : [...prev, photo.id]
+                    );
+                  } else {
+                    setLightboxIndex(index);
+                  }
+                }}
+                style={{ cursor: 'pointer', position: 'relative' }}
+              >
+                <img 
+                  className="photo-thumb" 
+                  src={photo.thumb_path || photo.original_path} 
+                  alt="album photo" 
+                  loading="lazy"
+                />
+                {selectionMode && (
+                  <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
+                    {isSelected ? '✓' : ''}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="empty-state">
           <div className="empty-state-icon">🖼️</div>
           <p>No photos in this album yet.</p>
         </div>
+      )}
+
+      {lightboxIndex !== null && (
+        <PhotoLightbox 
+          photos={album.photos} 
+          initialIndex={lightboxIndex} 
+          onClose={() => setLightboxIndex(null)} 
+        />
+      )}
+
+      {actionModalOpen && selectedBand && (
+        <CrossLinkModal
+          selectedBandId={selectedBand.id}
+          targetType="feed"
+          photoIds={selectedPhotoIds}
+          onClose={() => setActionModalOpen(false)}
+          onSuccess={handleCrossLinkSuccess}
+        />
       )}
 
       <CommentSection

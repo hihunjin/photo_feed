@@ -164,9 +164,9 @@ async function createFeed(req, res) {
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         await db.query(
-          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order) 
-           VALUES (?, ?, ?, ?, ?, ?) RETURNING *`,
-          [createdFeed.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index]
+          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [createdFeed.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index, savedFile.uniquePhotoId]
         );
       }
 
@@ -309,9 +309,9 @@ async function addFeedPhoto(req, res) {
     const savedFiles = await saveUploadedFiles({ files: [file], prefix: 'feed', targetId: feedId });
     const savedFile = savedFiles[0];
     await db.query(
-      `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [feedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, nextOrder]
+      `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [feedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, nextOrder, savedFile.uniquePhotoId]
     );
 
     // Recalculate photo_count
@@ -378,6 +378,86 @@ async function deleteFeedPhoto(req, res) {
   }
 }
 
+async function copyPhotosToAlbum(req, res) {
+  try {
+    const { feedId } = req.params;
+    const { photoIds, albumId, newAlbumTitle } = req.body;
+    const userId = req.user.id;
+
+    if (!photoIds || !Array.isArray(photoIds) || photoIds.length === 0) {
+      return res.status(400).json({ error: 'No photos selected' });
+    }
+
+    // Verify feed exists
+    const feed = await db.query(`SELECT band_id FROM feeds WHERE id = ?`, [feedId]);
+    if (feed.length === 0) return res.status(404).json({ error: 'Feed not found' });
+    const bandId = feed[0].band_id;
+
+    let targetAlbumId = albumId;
+
+    // Create new album if requested
+    if (!targetAlbumId && newAlbumTitle) {
+      const albumRes = await db.query(
+        `INSERT INTO albums (band_id, author_id, title, photo_count) VALUES (?, ?, ?, 0) RETURNING id`,
+        [bandId, userId, newAlbumTitle]
+      );
+      targetAlbumId = albumRes[0].id;
+    }
+
+    if (!targetAlbumId) {
+      return res.status(400).json({ error: 'Album ID or new title required' });
+    }
+
+    // Get unique_photo_ids for the selected photos
+    const photos = await db.query(
+      `SELECT * FROM feed_photos WHERE feed_id = ? AND id IN (${photoIds.map(() => '?').join(',')})`,
+      [feedId, ...photoIds]
+    );
+
+    if (photos.length === 0) {
+      return res.status(404).json({ error: 'Photos not found' });
+    }
+
+    // Get next sort_order for the target album
+    const maxOrderRes = await db.query(
+      `SELECT COALESCE(MAX(sort_order), -1) as max_order FROM album_photos WHERE album_id = ?`,
+      [targetAlbumId]
+    );
+    let nextOrder = maxOrderRes[0].max_order + 1;
+
+    // Copy to album_photos
+    for (const photo of photos) {
+      // Check if already in album
+      const exists = await db.query(
+        `SELECT id FROM album_photos WHERE album_id = ? AND unique_photo_id = ?`,
+        [targetAlbumId, photo.unique_photo_id]
+      );
+
+      if (exists.length === 0) {
+        await db.query(
+          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [targetAlbumId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id]
+        );
+      }
+    }
+
+    // Update photo_count and cover
+    const countRes = await db.query(`SELECT COUNT(*) as count FROM album_photos WHERE album_id = ?`, [targetAlbumId]);
+    const firstPhoto = await db.query(`SELECT thumb_path FROM album_photos WHERE album_id = ? ORDER BY sort_order LIMIT 1`, [targetAlbumId]);
+    
+    await db.query(
+      `UPDATE albums SET photo_count = ?, cover_thumb_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [countRes[0].count, firstPhoto[0]?.thumb_path || null, targetAlbumId]
+    );
+
+    res.status(201).json({ success: true, albumId: targetAlbumId });
+  } catch (err) {
+    console.error('Error copying photos to album:', err);
+    res.status(500).json({ error: 'Failed to copy photos' });
+  }
+}
+
 module.exports = {
   getAllFeeds,
   getFeedById,
@@ -386,5 +466,6 @@ module.exports = {
   deleteFeed,
   adminDeleteFeed,
   addFeedPhoto,
-  deleteFeedPhoto
+  deleteFeedPhoto,
+  copyPhotosToAlbum
 };

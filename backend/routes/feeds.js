@@ -32,6 +32,9 @@ feedRouter.post('/:feedId/photos', authMiddleware, upload.single('photo'), feedC
 // DELETE /feeds/:feedId/photos/:photoId - Delete a single photo (protected)
 feedRouter.delete('/:feedId/photos/:photoId', authMiddleware, feedController.deleteFeedPhoto);
 
+// POST /feeds/:feedId/photos/to-album - Copy photos to an album (protected)
+feedRouter.post('/:feedId/photos/to-album', authMiddleware, feedController.copyPhotosToAlbum);
+
 module.exports = {
   default: router,
   feedRouter

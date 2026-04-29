@@ -5,11 +5,18 @@ const cors = require('cors');
 const path = require('path');
 const db = require('./db');
 
+const { startWorker } = require('./services/thumbnailWorker');
+
 // Initialize database
 db.initialize();
 
 // Initialize Express app
 const app = express();
+
+// Start background worker
+if (require.main === module) {
+  startWorker();
+}
 
 // Middleware
 app.use(compression());
@@ -18,6 +25,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use('/media/originals', express.static(path.join(__dirname, 'data/originals')));
+app.use('/media/thumbnails', express.static(path.join(__dirname, 'data/thumbnails')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

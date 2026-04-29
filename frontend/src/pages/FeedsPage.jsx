@@ -18,15 +18,15 @@ export default function FeedsPage({ user, selectedBand, onSelectBand }) {
   return (
     <Routes>
       <Route index element={<FeedListView user={user} selectedBand={selectedBand} onSelectBand={handleSelectBand} />} />
-      <Route path=":feedId" element={<FeedDetailWrapper onBackPath=".." />} />
+      <Route path=":feedId" element={<FeedDetailWrapper onBackPath=".." selectedBand={selectedBand} />} />
     </Routes>
   );
 }
 
-function FeedDetailWrapper({ onBackPath }) {
+function FeedDetailWrapper({ onBackPath, selectedBand }) {
   const { feedId } = useParams();
   const navigate = useNavigate();
-  return <FeedDetailPage feedId={feedId} onBack={() => navigate(onBackPath)} />;
+  return <FeedDetailPage feedId={feedId} onBack={() => navigate(onBackPath)} selectedBand={selectedBand} />;
 }
 
 function FeedListView({ user, selectedBand, onSelectBand }) {

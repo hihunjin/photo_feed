@@ -171,8 +171,8 @@ function query(sql, params = []) {
     try {
       const trimmedSql = sql.trim().toUpperCase();
       
-      // Check if it's a SELECT statement
-      if (trimmedSql.startsWith('SELECT')) {
+      // Check if it's a SELECT or PRAGMA statement
+      if (trimmedSql.startsWith('SELECT') || trimmedSql.startsWith('PRAGMA')) {
         db.all(sql, params, (err, rows) => {
           if (err) {
             console.error('DB Error:', err.message);

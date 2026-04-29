@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getFeed, getComments, updateFeed, addFeedPhoto, deleteFeedPhoto } from '../api';
 import CommentSection from '../components/CommentSection';
+import PhotoLightbox from '../components/PhotoLightbox';
+import CrossLinkModal from '../components/CrossLinkModal';
 
-export default function FeedDetailPage({ feedId, onBack }) {
+export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
   const [feed, setFeed] = useState(null);
   const [comments, setComments] = useState([]);
   const [error, setError] = useState('');
+
+  // Lightbox state
+  const [lightboxIndex, setLightboxIndex] = useState(null);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -14,6 +19,11 @@ export default function FeedDetailPage({ feedId, onBack }) {
   const [savePending, setSavePending] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState([]);
   const fileInputRef = useRef(null);
+
+  // Selection state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState([]);
+  const [actionModalOpen, setActionModalOpen] = useState(false);
 
   const loadComments = useCallback(async () => {
     try {
@@ -37,6 +47,34 @@ export default function FeedDetailPage({ feedId, onBack }) {
     loadFeed();
     loadComments();
   }, [loadFeed, loadComments]);
+
+  async function handleCrossLinkSuccess(data) {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/feeds/${feedId}/photos/to-album`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          photoIds: selectedPhotoIds,
+          albumId: data.targetId,
+          newAlbumTitle: data.newTitle
+        })
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to copy');
+
+      alert('Photos saved to album successfully!');
+      setActionModalOpen(false);
+      setSelectionMode(false);
+      setSelectedPhotoIds([]);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
 
   function openEdit() {
     setEditText(feed.text);
@@ -147,23 +185,89 @@ export default function FeedDetailPage({ feedId, onBack }) {
           <strong>Feed #{feed.id}</strong>
         </div>
         <div className="row" style={{ gap: 8 }}>
+          <button 
+            className={`btn btn-sm ${selectionMode ? 'btn-primary' : 'btn-ghost'}`} 
+            onClick={() => {
+              setSelectionMode(!selectionMode);
+              setSelectedPhotoIds([]);
+            }}
+          >
+            {selectionMode ? 'Done' : 'Select'}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={openEdit} title="Edit feed">✏️ Edit</button>
           <span className="muted">{new Date(feed.created_at).toLocaleString()}</span>
         </div>
       </div>
 
+      {selectionMode && selectedPhotoIds.length > 0 && (
+        <div className="selection-toolbar card fade-in" style={{ padding: '10px 20px', marginBottom: 10 }}>
+          <div className="row-between">
+            <span>{selectedPhotoIds.length} photo(s) selected</span>
+            <button className="btn btn-primary btn-sm" onClick={() => setActionModalOpen(true)}>
+              Save to Album
+            </button>
+          </div>
+        </div>
+      )}
+
       <article className="card grid" style={{ gap: 14 }}>
         <p className="feed-full-text feed-preview">{feed.text}</p>
         {currentPhotos.length > 0 && (
           <div className="photo-grid">
-            {currentPhotos.map((photo) => (
-              <a key={photo.id} href={photo.original_path} target="_blank" rel="noreferrer">
-                <img className="photo-thumb" src={photo.thumb_path || photo.original_path} alt="feed attachment" />
-              </a>
-            ))}
+            {currentPhotos.map((photo, index) => {
+              const isSelected = selectedPhotoIds.includes(photo.id);
+              return (
+                <div 
+                  key={photo.id} 
+                  className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
+                  onClick={() => {
+                    if (selectionMode) {
+                      setSelectedPhotoIds(prev => 
+                        prev.includes(photo.id) 
+                          ? prev.filter(id => id !== photo.id) 
+                          : [...prev, photo.id]
+                      );
+                    } else {
+                      setLightboxIndex(index);
+                    }
+                  }}
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  <img 
+                    className="photo-thumb" 
+                    src={photo.thumb_path || photo.original_path} 
+                    alt="feed attachment" 
+                    loading="lazy"
+                  />
+                  {selectionMode && (
+                    <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
+                      {isSelected ? '✓' : ''}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </article>
+
+      {lightboxIndex !== null && (
+        <PhotoLightbox 
+          photos={currentPhotos} 
+          initialIndex={lightboxIndex} 
+          onClose={() => setLightboxIndex(null)} 
+        />
+      )}
+
+      {actionModalOpen && selectedBand && (
+        <CrossLinkModal
+          selectedBandId={selectedBand.id}
+          targetType="album"
+          photoIds={selectedPhotoIds}
+          onClose={() => setActionModalOpen(false)}
+          onSuccess={handleCrossLinkSuccess}
+        />
+      )}
 
       <CommentSection
         targetType="feed"
