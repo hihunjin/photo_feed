@@ -72,7 +72,7 @@ async function getAlbumById(req, res) {
 async function createAlbum(req, res) {
   try {
     const { bandId } = req.params;
-    const { title, description } = req.body;
+    const { title, description, photoIds } = req.body;
     const userId = req.user.id;
     const files = req.files || [];
 
@@ -80,48 +80,60 @@ async function createAlbum(req, res) {
       return res.status(400).json({ error: 'Title is required' });
     }
 
-    const policy = await getUploadPolicy();
-    try {
-      await validateFiles(files, policy, policy.album_max_photos || 1000);
-    } catch (validationError) {
-      return res.status(validationError.statusCode || 400).json({ error: validationError.message });
-    }
-
     const bandCheck = await db.query(`SELECT id FROM bands WHERE id = ?`, [bandId]);
     if (bandCheck.length === 0) {
       return res.status(404).json({ error: 'Band not found' });
     }
 
-    await db.query(
+    // 1. Create album
+    const albumRes = await db.query(
       `INSERT INTO albums (band_id, author_id, title, description, photo_count) 
-       VALUES (?, ?, ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, 0) RETURNING id`,
       [bandId, userId, title, description || null]
     );
+    const createdAlbum = albumRes[0];
 
-    const albums = await db.query(
-      `SELECT * FROM albums WHERE band_id = ? AND author_id = ? ORDER BY id DESC LIMIT 1`,
-      [bandId, userId]
-    );
+    let totalPhotoCount = 0;
+    let coverThumb = null;
 
-    const createdAlbum = albums[0];
-
+    // 2. Handle newly uploaded files (Legacy)
     if (files.length > 0) {
       const savedFiles = await saveUploadedFiles({ files, prefix: 'album', targetId: createdAlbum.id });
-
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
+        if (!coverThumb) coverThumb = savedFile.thumbnailUrl;
         await db.query(
           `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdAlbum.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index, savedFile.uniquePhotoId]
+          [createdAlbum.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
         );
       }
-
-      await db.query(
-        `UPDATE albums SET photo_count = ?, cover_thumb_path = ? WHERE id = ?`,
-        [files.length, savedFiles[0].thumbnailUrl, createdAlbum.id]
-      );
     }
+
+    // 3. Handle pre-uploaded unique_photo_ids (New)
+    if (photoIds) {
+      const ids = Array.isArray(photoIds) ? photoIds : (typeof photoIds === 'string' ? JSON.parse(photoIds) : []);
+      if (ids.length > 0) {
+        const uniquePhotos = await db.query(
+          `SELECT * FROM unique_photos WHERE id IN (${ids.map(() => '?').join(',')})`,
+          ids
+        );
+        for (const up of uniquePhotos) {
+          if (!coverThumb) coverThumb = up.thumb_path;
+          await db.query(
+            `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [createdAlbum.id, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+          );
+        }
+      }
+    }
+
+    // 4. Update photo_count and cover
+    await db.query(
+      `UPDATE albums SET photo_count = ?, cover_thumb_path = ? WHERE id = ?`,
+      [totalPhotoCount, coverThumb, createdAlbum.id]
+    );
 
     const refreshedAlbum = await db.query(`SELECT * FROM albums WHERE id = ?`, [createdAlbum.id]);
     const photos = await db.query(
@@ -268,11 +280,85 @@ async function copyPhotosToFeed(req, res) {
   }
 }
 
+async function addAlbumPhoto(req, res) {
+  try {
+    const { albumId } = req.params;
+    const file = req.file;
+    const userId = req.user.id;
+
+    const album = await db.query(`SELECT author_id FROM albums WHERE id = ?`, [albumId]);
+    if (album.length === 0) return res.status(404).json({ error: 'Album not found' });
+    if (album[0].author_id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const maxOrder = await db.query(
+      `SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM album_photos WHERE album_id = ?`,
+      [albumId]
+    );
+    const nextOrder = (maxOrder[0]?.max_order ?? -1) + 1;
+
+    const { saveUploadedFiles } = require('../services/uploadService');
+    const savedFiles = await saveUploadedFiles({ files: [file], prefix: 'album', targetId: albumId });
+    const savedFile = savedFiles[0];
+
+    await db.query(
+      `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [albumId, savedFile.originalUrl, savedFile.thumbnailUrl || savedFile.originalUrl, null, null, nextOrder, savedFile.uniquePhotoId]
+    );
+
+    const countResult = await db.query(`SELECT COUNT(*) AS cnt FROM album_photos WHERE album_id = ?`, [albumId]);
+    await db.query(
+      `UPDATE albums SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [countResult[0].cnt, albumId]
+    );
+
+    const photo = await db.query(
+      `SELECT id, original_path, thumb_path, width, height, sort_order FROM album_photos WHERE album_id = ? ORDER BY id DESC LIMIT 1`,
+      [albumId]
+    );
+
+    res.status(201).json(photo[0]);
+  } catch (err) {
+    console.error('Error adding album photo:', err);
+    res.status(500).json({ error: 'Failed to add photo' });
+  }
+}
+
+async function deleteAlbumPhoto(req, res) {
+  try {
+    const { albumId, photoId } = req.params;
+    const userId = req.user.id;
+
+    const album = await db.query(`SELECT author_id FROM albums WHERE id = ?`, [albumId]);
+    if (album.length === 0) return res.status(404).json({ error: 'Album not found' });
+    if (album[0].author_id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    await db.query(`DELETE FROM album_photos WHERE id = ? AND album_id = ?`, [photoId, albumId]);
+
+    const countResult = await db.query(`SELECT COUNT(*) AS cnt FROM album_photos WHERE album_id = ?`, [albumId]);
+    await db.query(
+      `UPDATE albums SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [countResult[0].cnt, albumId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting album photo:', err);
+    res.status(500).json({ error: 'Failed to delete photo' });
+  }
+}
+
 module.exports = {
   getAllAlbums,
   getAlbumById,
   createAlbum,
   updateAlbum,
   deleteAlbum,
-  copyPhotosToFeed
+  copyPhotosToFeed,
+  addAlbumPhoto,
+  deleteAlbumPhoto
 };

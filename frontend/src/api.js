@@ -8,8 +8,14 @@ async function request(path, options = {}) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+  const isFormData = options.body instanceof FormData;
+  const isString = typeof options.body === 'string';
+
+  if (options.body && !isFormData && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
+    if (!isString) {
+      options.body = JSON.stringify(options.body);
+    }
   }
 
   const response = await fetch(`${API_BASE}${path}`, {
@@ -144,4 +150,33 @@ export function deleteFeedPhoto(feedId, photoId) {
   return request(`/api/feeds/${feedId}/photos/${photoId}`, {
     method: 'DELETE'
   });
+}
+
+export function addAlbumPhoto(albumId, file) {
+  const formData = new FormData();
+  formData.append('photo', file);
+  return request(`/api/albums/${albumId}/photos`, {
+    method: 'POST',
+    body: formData
+  });
+}
+
+export function deleteAlbumPhoto(albumId, photoId) {
+  return request(`/api/albums/${albumId}/photos/${photoId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function uploadPhoto(file) {
+  const token = localStorage.getItem('token');
+  const formData = new FormData();
+  formData.append('photo', file);
+
+  const res = await fetch('/api/photos/upload', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: formData
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  return res.json();
 }

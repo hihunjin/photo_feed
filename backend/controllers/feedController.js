@@ -121,7 +121,7 @@ async function getFeedById(req, res) {
 async function createFeed(req, res) {
   try {
     const { bandId } = req.params;
-    const { text } = req.body;
+    const { text, photoIds } = req.body;
     const userId = req.user.id;
     const files = req.files || [];
 
@@ -129,14 +129,6 @@ async function createFeed(req, res) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    const policy = await getUploadPolicy();
-    try {
-      await validateFiles(files, policy, policy.feed_max_photos || 50);
-    } catch (validationError) {
-      return res.status(validationError.statusCode || 400).json({ error: validationError.message });
-    }
-
-    // Verify band exists
     const bandCheck = await db.query(`SELECT id FROM bands WHERE id = ?`, [bandId]);
     if (bandCheck.length === 0) {
       return res.status(404).json({ error: 'Band not found' });
@@ -144,37 +136,53 @@ async function createFeed(req, res) {
 
     const previewText = truncatePreview(text);
 
-    await db.query(
-      `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count, comment_count) 
-       VALUES (?, ?, ?, ?, 0, 0)`,
+    // 1. Create feed
+    const feedRes = await db.query(
+      `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count) 
+       VALUES (?, ?, ?, ?, 0) RETURNING id`,
       [bandId, userId, text, previewText]
     );
+    const createdFeed = feedRes[0];
 
-    // Fetch the created feed
-    const feeds = await db.query(
-      `SELECT * FROM feeds WHERE band_id = ? AND author_id = ? ORDER BY id DESC LIMIT 1`,
-      [bandId, userId]
-    );
+    let totalPhotoCount = 0;
 
-    const createdFeed = feeds[0];
-
+    // 2. Handle newly uploaded files (Legacy/Simple mode)
     if (files.length > 0) {
       const savedFiles = await saveUploadedFiles({ files, prefix: 'feed', targetId: createdFeed.id });
-
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         await db.query(
           `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdFeed.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, index, savedFile.uniquePhotoId]
+          [createdFeed.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
         );
       }
-
-      await db.query(
-        `UPDATE feeds SET photo_count = ? WHERE id = ?`,
-        [files.length, createdFeed.id]
-      );
     }
+
+    // 3. Handle pre-uploaded unique_photo_ids (New "Instant Upload" mode)
+    if (photoIds) {
+      const ids = Array.isArray(photoIds) ? photoIds : (typeof photoIds === 'string' ? JSON.parse(photoIds) : []);
+      if (ids.length > 0) {
+        const uniquePhotos = await db.query(
+          `SELECT * FROM unique_photos WHERE id IN (${ids.map(() => '?').join(',')})`,
+          ids
+        );
+
+        for (const up of uniquePhotos) {
+          await db.query(
+            `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [createdFeed.id, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+          );
+        }
+      }
+    }
+
+    // 4. Update photo_count
+    await db.query(
+      `UPDATE feeds SET photo_count = ? WHERE id = ?`,
+      [totalPhotoCount, createdFeed.id]
+    );
 
     const refreshedFeed = await db.query(`SELECT * FROM feeds WHERE id = ?`, [createdFeed.id]);
     const photos = await db.query(

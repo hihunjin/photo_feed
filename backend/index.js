@@ -36,6 +36,7 @@ app.use('/api/bands', require('./routes/albums').default);
 app.use('/api/albums', require('./routes/albums').albumRouter);
 app.use('/api/comments', require('./routes/comments'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/photos', require('./routes/photos'));
 
 // Health check
 app.get('/health', (req, res) => {

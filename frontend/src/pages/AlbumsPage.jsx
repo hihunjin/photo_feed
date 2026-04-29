@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { getAlbums, getAlbum, createAlbum, getComments, updateAlbum } from '../api';
+import { getAlbums, getAlbum, createAlbum, getComments, updateAlbum, uploadPhoto, addAlbumPhoto, deleteAlbumPhoto } from '../api';
 import { usePagination } from '../hooks/usePagination';
 import BandSelector from '../components/BandSelector';
 import CommentSection from '../components/CommentSection';
@@ -38,11 +38,15 @@ function AlbumListView({ selectedBand, onSelectBand }) {
   const [desc, setDesc] = useState('');
   const fileRef = useRef(null);
 
-  // Edit state
+  const [saving, setSaving] = useState(false);
   const [editAlbum, setEditAlbum] = useState(null);
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [saving, setSaving] = useState(false);
+
+  // Instant upload state
+  const [uploadingFiles, setUploadingFiles] = useState([]);
+  const [stagedPhotos, setStagedPhotos] = useState([]);
+  const [savePending, setSavePending] = useState(false);
 
   const loader = useMemo(() => async ({ cursor }) => {
     if (!selectedBand) return { items: [], hasMore: false, cursor: null };
@@ -55,23 +59,66 @@ function AlbumListView({ selectedBand, onSelectBand }) {
     if (selectedBand) setParams({});
   }, [selectedBand, setParams]);
 
+  const uploadPhotos = async (files) => {
+    const newUploads = Array.from(files).map((file, i) => ({
+      id: `temp-${Date.now()}-${i}`,
+      file,
+      objectUrl: URL.createObjectURL(file)
+    }));
+    setUploadingFiles(prev => [...prev, ...newUploads]);
+    for (const uploadObj of newUploads) {
+      try {
+        const result = await uploadPhoto(uploadObj.file);
+        setStagedPhotos(prev => [...prev, {
+          id: result.uniquePhotoId,
+          thumb: result.thumbnailUrl || result.originalUrl
+        }]);
+      } catch (err) {
+        alert('Upload failed');
+      } finally {
+        setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
+        URL.revokeObjectURL(uploadObj.objectUrl);
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) uploadPhotos(e.target.files);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  useEffect(() => {
+    if (savePending && uploadingFiles.length === 0) {
+      setSavePending(false);
+      performCreate();
+    }
+  }, [savePending, uploadingFiles.length]);
+
+  async function performCreate() {
+    setSaving(true);
+    try {
+      await createAlbum(selectedBand.id, {
+        title: title.trim(),
+        description: desc.trim(),
+        photoIds: stagedPhotos.map(p => p.id)
+      });
+      setTitle('');
+      setDesc('');
+      setStagedPhotos([]);
+      setShowForm(false);
+      refresh();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!title.trim()) return;
-    const formData = new FormData();
-    formData.set('title', title.trim());
-    if (desc.trim()) formData.set('description', desc.trim());
-    if (fileRef.current?.files.length > 0) {
-      for (const file of fileRef.current.files) {
-        formData.append('photos', file);
-      }
-    }
-    await createAlbum(selectedBand.id, formData);
-    setTitle('');
-    setDesc('');
-    if (fileRef.current) fileRef.current.value = '';
-    setShowForm(false);
-    refresh();
+    if (uploadingFiles.length > 0) setSavePending(true);
+    else performCreate();
   }
 
   function openEdit(album, e) {
@@ -117,11 +164,41 @@ function AlbumListView({ selectedBand, onSelectBand }) {
             <form className="card grid" onSubmit={handleCreate} style={{ gap: 12 }}>
               <input className="input" placeholder="Album title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
               <textarea className="textarea" placeholder="Description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} style={{ minHeight: 60 }} />
-              <div className="file-input-wrap">
-                <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic" multiple />
+              <div className="photo-grid" style={{ marginBottom: 4 }}>
+                {stagedPhotos.map((photo) => (
+                  <div key={photo.id} className="photo-edit-item">
+                    <img className="photo-thumb" src={photo.thumb} alt="staged" />
+                    <button 
+                      type="button"
+                      className="photo-delete-badge" 
+                      onClick={() => setStagedPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                    >✕</button>
+                  </div>
+                ))}
+                {uploadingFiles.map((up) => (
+                  <div key={up.id} className="photo-edit-item">
+                    <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+                    <div className="uploading-overlay">
+                      <div className="spinner"></div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <p className="muted" style={{ margin: 0 }}>Up to 1000 photos per album</p>
-              <button className="btn btn-primary" type="submit">Create Album</button>
+
+              <div className="file-input-wrap">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  multiple
+                  disabled={saving}
+                  onChange={handleFileSelect}
+                />
+              </div>
+              <p className="muted" style={{ margin: 0 }}>Create album and add photos</p>
+              <button className="btn btn-primary" type="submit" disabled={saving}>
+                {savePending || (saving && uploadingFiles.length > 0) ? 'Uploading…' : (saving ? 'Creating…' : 'Create Album')}
+              </button>
             </form>
           )}
 
@@ -248,6 +325,56 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
     }
   }
 
+  const uploadPhotos = async (files) => {
+    const newUploads = Array.from(files).map((file, i) => ({
+      id: `temp-${Date.now()}-${i}`,
+      file,
+      objectUrl: URL.createObjectURL(file)
+    }));
+
+    setUploadingFiles(prev => [...prev, ...newUploads]);
+
+    for (const uploadObj of newUploads) {
+      try {
+        const newPhoto = await addAlbumPhoto(albumId, uploadObj.file);
+        setAlbum(prev => ({
+          ...prev,
+          photos: [...(prev.photos || []), newPhoto],
+          photo_count: (prev.photo_count || 0) + 1
+        }));
+      } catch (err) {
+        console.error('Failed to upload photo', err);
+        alert('Failed to upload photo: ' + err.message);
+      } finally {
+        setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
+        URL.revokeObjectURL(uploadObj.objectUrl);
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadPhotos(e.target.files);
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  async function handleDeletePhoto(photoId) {
+    try {
+      await deleteAlbumPhoto(albumId, photoId);
+      setAlbum(prev => ({
+        ...prev,
+        photos: prev.photos.filter(p => p.id !== photoId),
+        photo_count: Math.max(0, (prev.photo_count || 0) - 1)
+      }));
+    } catch (err) {
+      alert('Failed to delete photo: ' + err.message);
+    }
+  }
+
+  const [uploadingFiles, setUploadingFiles] = useState([]);
+  const fileRef = useRef(null);
+
   async function handleSaveEdit() {
     setSaving(true);
     try {
@@ -300,13 +427,11 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
         </div>
       )}
 
-      {album.description && (
-        <p className="muted">{album.description}</p>
-      )}
-
-      {Array.isArray(album.photos) && album.photos.length > 0 ? (
+      <div className="card grid" style={{ gap: 14 }}>
+        {album.description && <p className="text-secondary">{album.description}</p>}
+        
         <div className="photo-grid">
-          {album.photos.map((photo, index) => {
+          {Array.isArray(album.photos) && album.photos.map((photo, index) => {
             const isSelected = selectedPhotoIds.includes(photo.id);
             return (
               <div 
@@ -323,7 +448,7 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
                     setLightboxIndex(index);
                   }
                 }}
-                style={{ cursor: 'pointer', position: 'relative' }}
+                style={{ cursor: 'pointer' }}
               >
                 <img 
                   className="photo-thumb" 
@@ -336,16 +461,42 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
                     {isSelected ? '✓' : ''}
                   </div>
                 )}
+                <button 
+                  className="photo-delete-badge" 
+                  onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
+                  title="Delete photo"
+                >✕</button>
               </div>
             );
           })}
+          {uploadingFiles.map((up) => (
+            <div key={up.id} className="photo-thumb-container">
+              <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+              <div className="uploading-overlay">
+                <div className="spinner"></div>
+              </div>
+            </div>
+          ))}
+          {!album.photos?.length && !uploadingFiles.length && (
+            <p className="muted">No photos yet.</p>
+          )}
         </div>
-      ) : (
-        <div className="empty-state">
-          <div className="empty-state-icon">🖼️</div>
-          <p>No photos in this album yet.</p>
+
+        {/* Add photos action */}
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-color)' }}>
+          <p className="muted" style={{ marginBottom: 6 }}>Add photos to album:</p>
+          <div className="file-input-wrap">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic"
+              multiple
+              disabled={saving}
+              onChange={handleFileSelect}
+            />
+          </div>
         </div>
-      )}
+      </div>
 
       {lightboxIndex !== null && (
         <PhotoLightbox 

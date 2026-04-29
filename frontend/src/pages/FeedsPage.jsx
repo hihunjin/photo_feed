@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { getBands, getFeeds, createFeed } from '../api';
+import { getBands, getFeeds, createFeed, uploadPhoto } from '../api';
 import { usePagination } from '../hooks/usePagination';
 import FeedCard from '../components/FeedCard';
 import FeedDetailPage from './FeedDetailPage';
@@ -37,6 +37,12 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
+  // Instant upload state
+  const [uploadingFiles, setUploadingFiles] = useState([]);
+  const [stagedPhotos, setStagedPhotos] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savePending, setSavePending] = useState(false);
+
   const feedLoader = useMemo(() => async ({ cursor }) => {
     if (!selectedBand) return { items: [], hasMore: false, cursor: null };
     return getFeeds(selectedBand.id, { sort, limit: 10, cursor });
@@ -51,21 +57,75 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
     }
   }, [selectedBand, sort, setParams]);
 
+  const uploadPhotos = async (files) => {
+    const newUploads = Array.from(files).map((file, i) => ({
+      id: `temp-${Date.now()}-${i}`,
+      file,
+      objectUrl: URL.createObjectURL(file)
+    }));
+
+    setUploadingFiles(prev => [...prev, ...newUploads]);
+
+    for (const uploadObj of newUploads) {
+      try {
+        const result = await uploadPhoto(uploadObj.file);
+        // result should have uniquePhotoId, thumbnailUrl, etc.
+        setStagedPhotos(prev => [...prev, {
+          id: result.uniquePhotoId,
+          thumb: result.thumbnailUrl || result.originalUrl,
+          original: result.originalUrl
+        }]);
+      } catch (err) {
+        console.error('Upload failed', err);
+        alert('Failed to upload photo');
+      } finally {
+        setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
+        URL.revokeObjectURL(uploadObj.objectUrl);
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      uploadPhotos(e.target.files);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  useEffect(() => {
+    if (savePending && uploadingFiles.length === 0) {
+      setSavePending(false);
+      performCreate();
+    }
+  }, [savePending, uploadingFiles.length]);
+
+  async function performCreate() {
+    setIsSaving(true);
+    try {
+      await createFeed(selectedBand.id, {
+        text: feedText.trim(),
+        photoIds: stagedPhotos.map(p => p.id)
+      });
+      setFeedText('');
+      setStagedPhotos([]);
+      setShowForm(false);
+      refresh();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     if (!feedText.trim()) return;
-    const formData = new FormData();
-    formData.set('text', feedText.trim());
-    if (fileInputRef.current?.files.length > 0) {
-      for (const file of fileInputRef.current.files) {
-        formData.append('photos', file);
-      }
+
+    if (uploadingFiles.length > 0) {
+      setSavePending(true);
+    } else {
+      performCreate();
     }
-    await createFeed(selectedBand.id, formData);
-    setFeedText('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    setShowForm(false);
-    refresh();
   }
 
   return (
@@ -119,16 +179,41 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
                 onChange={(e) => setFeedText(e.target.value)}
                 autoFocus
               />
+              <div className="photo-grid" style={{ marginBottom: 4 }}>
+                {stagedPhotos.map((photo) => (
+                  <div key={photo.id} className="photo-edit-item">
+                    <img className="photo-thumb" src={photo.thumb} alt="staged" />
+                    <button 
+                      type="button"
+                      className="photo-delete-badge" 
+                      onClick={() => setStagedPhotos(prev => prev.filter(p => p.id !== photo.id))}
+                    >✕</button>
+                  </div>
+                ))}
+                {uploadingFiles.map((up) => (
+                  <div key={up.id} className="photo-edit-item">
+                    <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+                    <div className="uploading-overlay">
+                      <div className="spinner"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <div className="file-input-wrap">
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/heic"
                   multiple
+                  disabled={isSaving}
+                  onChange={handleFileSelect}
                 />
               </div>
               <p className="muted" style={{ margin: 0 }}>Up to 50 photos per feed</p>
-              <button className="btn btn-primary" type="submit">Post Feed</button>
+              <button className="btn btn-primary" type="submit" disabled={isSaving}>
+                {savePending || (isSaving && uploadingFiles.length > 0) ? 'Uploading…' : (isSaving ? 'Posting…' : 'Post Feed')}
+              </button>
             </form>
           )}
 

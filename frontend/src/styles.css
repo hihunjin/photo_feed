@@ -498,6 +498,11 @@ a:hover {
   flex-wrap: wrap;
 }
 
+.photo-thumb-container, .photo-edit-item {
+  position: relative;
+  display: inline-block;
+}
+
 .photo-thumb {
   width: 88px;
   height: 88px;
