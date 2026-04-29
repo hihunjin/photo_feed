@@ -86,26 +86,26 @@ async function createAlbum(req, res) {
     }
 
     // 1. Create album
-    const albumRes = await db.query(
-      `INSERT INTO albums (band_id, author_id, title, description, photo_count) 
-       VALUES (?, ?, ?, ?, 0) RETURNING id`,
+    const insertRes = await db.query(
+      `INSERT INTO albums (band_id, author_id, title, description, created_at, updated_at)
+       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       [bandId, userId, title, description || null]
     );
-    const createdAlbum = albumRes[0];
+    const createdAlbumId = insertRes.id;
 
     let totalPhotoCount = 0;
     let coverThumb = null;
 
     // 2. Handle newly uploaded files (Legacy)
     if (files.length > 0) {
-      const savedFiles = await saveUploadedFiles({ files, prefix: 'album', targetId: createdAlbum.id });
+      const savedFiles = await saveUploadedFiles({ files, prefix: 'album', targetId: createdAlbumId });
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         if (!coverThumb) coverThumb = savedFile.thumbnailUrl;
         await db.query(
           `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdAlbum.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
+          [createdAlbumId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
         );
       }
     }
@@ -123,7 +123,7 @@ async function createAlbum(req, res) {
           await db.query(
             `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [createdAlbum.id, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+            [createdAlbumId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
           );
         }
       }
@@ -132,13 +132,13 @@ async function createAlbum(req, res) {
     // 4. Update photo_count and cover
     await db.query(
       `UPDATE albums SET photo_count = ?, cover_thumb_path = ? WHERE id = ?`,
-      [totalPhotoCount, coverThumb, createdAlbum.id]
+      [totalPhotoCount, coverThumb, createdAlbumId]
     );
 
-    const refreshedAlbum = await db.query(`SELECT * FROM albums WHERE id = ?`, [createdAlbum.id]);
+    const refreshedAlbum = await db.query(`SELECT * FROM albums WHERE id = ?`, [createdAlbumId]);
     const photos = await db.query(
       `SELECT id, original_path, thumb_path, width, height, sort_order FROM album_photos WHERE album_id = ? ORDER BY sort_order`,
-      [createdAlbum.id]
+      [createdAlbumId]
     );
 
     res.status(201).json({ ...refreshedAlbum[0], photos });
@@ -222,10 +222,10 @@ async function copyPhotosToFeed(req, res) {
     if (!targetFeedId && newFeedText) {
       const previewText = newFeedText.length > 200 ? newFeedText.substring(0, 200) : newFeedText;
       const feedRes = await db.query(
-        `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count) VALUES (?, ?, ?, ?, 0) RETURNING id`,
+        `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count) VALUES (?, ?, ?, ?, 0)`,
         [bandId, userId, newFeedText, previewText]
       );
-      targetFeedId = feedRes[0].id;
+      targetFeedId = feedRes.id;
     }
 
     if (!targetFeedId) {

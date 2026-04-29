@@ -228,7 +228,7 @@ function query(sql, params = []) {
             console.error('DB Error:', err.message);
             reject(err);
           } else {
-            resolve({ changes: this.changes });
+            resolve({ id: this.lastID, changes: this.changes });
           }
         });
       }

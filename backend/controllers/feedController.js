@@ -137,24 +137,24 @@ async function createFeed(req, res) {
     const previewText = truncatePreview(text);
 
     // 1. Create feed
-    const feedRes = await db.query(
+    const insertRes = await db.query(
       `INSERT INTO feeds (band_id, author_id, text, preview_text, photo_count) 
-       VALUES (?, ?, ?, ?, 0) RETURNING id`,
+       VALUES (?, ?, ?, ?, 0)`,
       [bandId, userId, text, previewText]
     );
-    const createdFeed = feedRes[0];
+    const createdFeedId = insertRes.id;
 
     let totalPhotoCount = 0;
 
     // 2. Handle newly uploaded files (Legacy/Simple mode)
     if (files.length > 0) {
-      const savedFiles = await saveUploadedFiles({ files, prefix: 'feed', targetId: createdFeed.id });
+      const savedFiles = await saveUploadedFiles({ files, prefix: 'feed', targetId: createdFeedId });
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         await db.query(
           `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdFeed.id, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
+          [createdFeedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
         );
       }
     }
@@ -172,7 +172,7 @@ async function createFeed(req, res) {
           await db.query(
             `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [createdFeed.id, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+            [createdFeedId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
           );
         }
       }
@@ -180,14 +180,14 @@ async function createFeed(req, res) {
 
     // 4. Update photo_count
     await db.query(
-      `UPDATE feeds SET photo_count = ? WHERE id = ?`,
-      [totalPhotoCount, createdFeed.id]
+      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      [totalPhotoCount, createdFeedId]
     );
 
-    const refreshedFeed = await db.query(`SELECT * FROM feeds WHERE id = ?`, [createdFeed.id]);
+    const refreshedFeed = await db.query(`SELECT * FROM feeds WHERE id = ?`, [createdFeedId]);
     const photos = await db.query(
       `SELECT id, original_path, thumb_path, width, height, sort_order FROM feed_photos WHERE feed_id = ? ORDER BY sort_order`,
-      [createdFeed.id]
+      [createdFeedId]
     );
 
     res.status(201).json({ ...refreshedFeed[0], photos });
@@ -406,10 +406,10 @@ async function copyPhotosToAlbum(req, res) {
     // Create new album if requested
     if (!targetAlbumId && newAlbumTitle) {
       const albumRes = await db.query(
-        `INSERT INTO albums (band_id, author_id, title, photo_count) VALUES (?, ?, ?, 0) RETURNING id`,
+        `INSERT INTO albums (band_id, author_id, title, photo_count) VALUES (?, ?, ?, 0)`,
         [bandId, userId, newAlbumTitle]
       );
-      targetAlbumId = albumRes[0].id;
+      targetAlbumId = albumRes.id;
     }
 
     if (!targetAlbumId) {

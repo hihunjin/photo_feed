@@ -219,20 +219,20 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
               return (
                 <div 
                   key={photo.id} 
-                  className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
-                  onClick={() => {
-                    if (selectionMode) {
-                      setSelectedPhotoIds(prev => 
-                        prev.includes(photo.id) 
-                          ? prev.filter(id => id !== photo.id) 
-                          : [...prev, photo.id]
-                      );
-                    } else {
-                      setLightboxIndex(index);
-                    }
-                  }}
-                  style={{ cursor: 'pointer', position: 'relative' }}
-                >
+                className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
+                onClick={() => {
+                  if (selectionMode) {
+                    setSelectedPhotoIds(prev => 
+                      prev.includes(photo.id) 
+                        ? prev.filter(id => id !== photo.id) 
+                        : [...prev, photo.id]
+                    );
+                  } else {
+                    setLightboxIndex(index);
+                  }
+                }}
+                style={{ cursor: 'pointer' }}
+              >
                   <img 
                     className="photo-thumb" 
                     src={photo.thumb_path || photo.original_path} 
@@ -320,7 +320,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                     </div>
                   ))}
                   {uploadingFiles.map((up) => (
-                    <div key={up.id} className="photo-edit-item" style={{ position: 'relative' }}>
+                    <div key={up.id} className="photo-edit-item">
                       <img
                         className="photo-thumb"
                         src={up.objectUrl}
