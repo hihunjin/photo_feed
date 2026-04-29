@@ -8,7 +8,7 @@ const PUBLIC_THUMBNAILS_BASE = '/media/thumbnails';
 
 async function processThumbnail(job) {
   const { id, target_id } = job;
-  
+
   try {
     // 1. Get original photo info
     const photos = await db.query('SELECT * FROM unique_photos WHERE id = ?', [target_id]);
@@ -16,7 +16,7 @@ async function processThumbnail(job) {
       throw new Error('Photo not found');
     }
     const photo = photos[0];
-    
+
     // original_path is like /media/originals/filename.jpg
     const filename = path.basename(photo.original_path);
     const originalPath = path.join(__dirname, '../data/originals', filename);
@@ -29,8 +29,9 @@ async function processThumbnail(job) {
     // 2. Generate thumbnail (400px square, Choice F1)
     const image = sharp(originalPath);
     const metadata = await image.metadata();
-    
+
     await image
+      // .rotate()  // auto-rotate based on EXIF orientation, then strip the tag
       .resize(400, 400, { fit: 'cover' })
       .toFile(thumbPath);
 
@@ -62,14 +63,14 @@ async function processThumbnail(job) {
 
 async function startWorker() {
   console.log('Thumbnail worker started');
-  
+
   // Run every 5 seconds
   setInterval(async () => {
     try {
       const jobs = await db.query(
         'SELECT * FROM thumbnail_jobs WHERE status = "queued" OR (status = "failed" AND attempts < 3) ORDER BY queued_at ASC LIMIT 1'
       );
-      
+
       if (jobs.length > 0) {
         const job = jobs[0];
         // Mark as processing
