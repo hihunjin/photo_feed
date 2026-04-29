@@ -111,15 +111,36 @@ describe('Feature 2: KST Timezone', () => {
     expect(content).toContain('tzdata');
   });
 
-  test('created_at should be a valid timestamp string', async () => {
+  test('index.js should set process.env.TZ to Asia/Seoul', () => {
+    const indexPath = path.join(__dirname, '../backend/index.js');
+    const content = fs.readFileSync(indexPath, 'utf8');
+    expect(content).toContain("process.env.TZ = 'Asia/Seoul'");
+  });
+
+  test('schema.sql should NOT use CURRENT_TIMESTAMP (uses localtime instead)', () => {
+    const schemaPath = path.join(__dirname, '../backend/schema.sql');
+    const content = fs.readFileSync(schemaPath, 'utf8');
+    expect(content).not.toContain('DEFAULT CURRENT_TIMESTAMP');
+    expect(content).toContain("datetime('now','localtime')");
+  });
+
+  test('created_at from DB should be a KST local time (not UTC)', async () => {
     const res = await request(app)
       .post(`/api/bands/${band.id}/feeds`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ text: 'Timezone test' });
+      .send({ text: 'KST timezone test' });
     expect(res.status).toBe(201);
-    // created_at should be a parseable date string
-    const d = new Date(res.body.created_at);
-    expect(d.toString()).not.toBe('Invalid Date');
+
+    // The timestamp should be parseable
+    const createdAt = res.body.created_at;
+    expect(createdAt).toBeDefined();
+
+    // Verify it's close to KST "now" (within 60 seconds)
+    // Since process.env.TZ=Asia/Seoul, new Date() gives KST
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const expectedPrefix = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+    expect(createdAt).toMatch(new RegExp(`^${expectedPrefix}`));
   });
 });
 

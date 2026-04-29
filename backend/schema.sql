@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS users (
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 -- Bands Table
@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS bands (
   name TEXT NOT NULL,
   description TEXT,
   created_by INTEGER NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
@@ -29,8 +29,8 @@ CREATE TABLE IF NOT EXISTS feeds (
   photo_count INTEGER NOT NULL DEFAULT 0,
   comment_count INTEGER NOT NULL DEFAULT 0,
   last_commented_at TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (band_id) REFERENCES bands(id),
   FOREIGN KEY (author_id) REFERENCES users(id)
 );
@@ -44,8 +44,8 @@ CREATE TABLE IF NOT EXISTS albums (
   description TEXT,
   photo_count INTEGER NOT NULL DEFAULT 0,
   cover_thumb_path TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (band_id) REFERENCES bands(id),
   FOREIGN KEY (author_id) REFERENCES users(id)
 );
@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS comments (
   target_type TEXT NOT NULL CHECK(target_type IN ('feed', 'album')),
   target_id INTEGER NOT NULL,
   content TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   deleted_at TEXT,
   FOREIGN KEY (author_id) REFERENCES users(id)
 );
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS feed_photos (
   height INTEGER,
   sort_order INTEGER NOT NULL DEFAULT 0,
   unique_photo_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (feed_id) REFERENCES feeds(id) ON DELETE CASCADE,
   FOREIGN KEY (unique_photo_id) REFERENCES unique_photos(id) ON DELETE SET NULL
 );
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS album_photos (
   height INTEGER,
   sort_order INTEGER NOT NULL DEFAULT 0,
   unique_photo_id INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (album_id) REFERENCES albums(id) ON DELETE CASCADE,
   FOREIGN KEY (unique_photo_id) REFERENCES unique_photos(id) ON DELETE SET NULL
 );
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS upload_policies (
   max_file_size_mb INTEGER NOT NULL DEFAULT 20,
   allowed_mime_types TEXT NOT NULL DEFAULT '["image/jpeg", "image/png", "image/webp", "image/heic"]',
   updated_by INTEGER,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (updated_by) REFERENCES users(id)
 );
 
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS unique_photos (
   height INTEGER,
   size INTEGER,
   mimetype TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 CREATE TABLE IF NOT EXISTS thumbnail_jobs (
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS thumbnail_jobs (
   status TEXT NOT NULL CHECK(status IN ('queued','processing','done','failed')) DEFAULT 'queued',
   attempts INTEGER NOT NULL DEFAULT 0,
   error_message TEXT,
-  queued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  queued_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
   started_at TEXT,
   finished_at TEXT
 );

@@ -105,7 +105,7 @@ async function ensureLocalUser(username, role) {
     // Update role if changed on DSM
     if (existing[0].role !== role) {
       await db.query(
-        'UPDATE users SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        `UPDATE users SET role = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
         [role, existing[0].id]
       );
     }

@@ -88,7 +88,7 @@ async function createAlbum(req, res) {
     // 1. Create album
     const insertRes = await db.query(
       `INSERT INTO albums (band_id, author_id, title, description, created_at, updated_at)
-       VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+       VALUES (?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`,
       [bandId, userId, title, description || null]
     );
     const createdAlbumId = insertRes.id;
@@ -164,7 +164,7 @@ async function updateAlbum(req, res) {
     }
 
     const updated = await db.query(
-      `UPDATE albums SET title = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE albums SET title = ?, description = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [title || album[0].title, description !== undefined ? description : album[0].description, albumId]
     );
 
@@ -269,7 +269,7 @@ async function copyPhotosToFeed(req, res) {
     // Update photo_count
     const countRes = await db.query(`SELECT COUNT(*) as count FROM feed_photos WHERE feed_id = ?`, [targetFeedId]);
     await db.query(
-      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE feeds SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countRes[0].count, targetFeedId]
     );
 
@@ -310,7 +310,7 @@ async function addAlbumPhoto(req, res) {
 
     const countResult = await db.query(`SELECT COUNT(*) AS cnt FROM album_photos WHERE album_id = ?`, [albumId]);
     await db.query(
-      `UPDATE albums SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE albums SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countResult[0].cnt, albumId]
     );
 
@@ -341,7 +341,7 @@ async function deleteAlbumPhoto(req, res) {
 
     const countResult = await db.query(`SELECT COUNT(*) AS cnt FROM album_photos WHERE album_id = ?`, [albumId]);
     await db.query(
-      `UPDATE albums SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE albums SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countResult[0].cnt, albumId]
     );
 

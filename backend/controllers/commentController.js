@@ -86,7 +86,7 @@ async function createComment(req, res) {
 
     // Update comment count on target
     await db.query(
-      `UPDATE ${tableName} SET comment_count = comment_count + 1, last_commented_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE ${tableName} SET comment_count = comment_count + 1, last_commented_at = datetime('now','localtime') WHERE id = ?`,
       [targetId]
     );
 
@@ -115,7 +115,7 @@ async function updateComment(req, res) {
     }
 
     const updated = await db.query(
-      `UPDATE comments SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE comments SET content = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [content || comment[0].content, commentId]
     );
 
@@ -145,7 +145,7 @@ async function deleteComment(req, res) {
 
     // Soft delete
     await db.query(
-      `UPDATE comments SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE comments SET deleted_at = datetime('now','localtime') WHERE id = ?`,
       [commentId]
     );
 
@@ -172,7 +172,7 @@ async function adminDeleteComment(req, res) {
       return res.status(404).json({ error: 'Comment not found' });
     }
 
-    await db.query(`UPDATE comments SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?`, [commentId]);
+    await db.query(`UPDATE comments SET deleted_at = datetime('now','localtime') WHERE id = ?`, [commentId]);
 
     const tableName = comment[0].target_type === 'feed' ? 'feeds' : 'albums';
     await db.query(

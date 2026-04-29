@@ -1,3 +1,5 @@
+// Set timezone BEFORE anything else — affects both Node.js Date and SQLite datetime('now','localtime')
+process.env.TZ = 'Asia/Seoul';
 require('dotenv').config();
 const express = require('express');
 const compression = require('compression');

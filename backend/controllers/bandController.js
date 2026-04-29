@@ -1,5 +1,12 @@
 const db = require('../db');
 
+// Format current local time as YYYY-MM-DD HH:mm:ss (respects process.env.TZ)
+function nowLocal() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 /**
  * Get all bands (public to all users)
  */
@@ -71,7 +78,7 @@ async function createBand(req, res) {
     }
 
     const createdBy = req.user.id;
-    const createdAt = new Date().toISOString();
+    const createdAt = nowLocal();
 
     const result = await db.query(
       `INSERT INTO bands (name, description, created_by, created_at, updated_at)
@@ -122,7 +129,7 @@ async function updateBand(req, res) {
     }
 
     // Update band
-    const updatedAt = new Date().toISOString();
+    const updatedAt = nowLocal();
     const updateName = name !== undefined ? name : band.name;
     const updateDescription = description !== undefined ? description : band.description;
 

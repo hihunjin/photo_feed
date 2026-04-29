@@ -46,7 +46,7 @@ async function processThumbnail(job) {
 
     // 5. Update job status
     await db.query(
-      'UPDATE thumbnail_jobs SET status = "done", finished_at = CURRENT_TIMESTAMP WHERE id = ?',
+      `UPDATE thumbnail_jobs SET status = "done", finished_at = datetime('now','localtime') WHERE id = ?`,
       [id]
     );
 
@@ -73,7 +73,7 @@ async function startWorker() {
       if (jobs.length > 0) {
         const job = jobs[0];
         // Mark as processing
-        await db.query('UPDATE thumbnail_jobs SET status = "processing", started_at = CURRENT_TIMESTAMP WHERE id = ?', [job.id]);
+        await db.query(`UPDATE thumbnail_jobs SET status = "processing", started_at = datetime('now','localtime') WHERE id = ?`, [job.id]);
         await processThumbnail(job);
       }
     } catch (err) {

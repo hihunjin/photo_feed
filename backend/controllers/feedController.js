@@ -182,7 +182,7 @@ async function createFeed(req, res) {
 
     // 4. Update photo_count
     await db.query(
-      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE feeds SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [totalPhotoCount, createdFeedId]
     );
 
@@ -219,7 +219,7 @@ async function updateFeed(req, res) {
     const previewText = text ? truncatePreview(text) : feed[0].preview_text;
 
     const updated = await db.query(
-      `UPDATE feeds SET text = ?, preview_text = ?, updated_at = CURRENT_TIMESTAMP 
+      `UPDATE feeds SET text = ?, preview_text = ?, updated_at = datetime('now','localtime') 
        WHERE id = ?`,
       [text || feed[0].text, previewText, feedId]
     );
@@ -330,7 +330,7 @@ async function addFeedPhoto(req, res) {
       [feedId]
     );
     await db.query(
-      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE feeds SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countResult[0].cnt, feedId]
     );
 
@@ -377,7 +377,7 @@ async function deleteFeedPhoto(req, res) {
       [feedId]
     );
     await db.query(
-      `UPDATE feeds SET photo_count = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE feeds SET photo_count = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countResult[0].cnt, feedId]
     );
 
@@ -457,7 +457,7 @@ async function copyPhotosToAlbum(req, res) {
     const firstPhoto = await db.query(`SELECT thumb_path FROM album_photos WHERE album_id = ? ORDER BY sort_order LIMIT 1`, [targetAlbumId]);
     
     await db.query(
-      `UPDATE albums SET photo_count = ?, cover_thumb_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE albums SET photo_count = ?, cover_thumb_path = ?, updated_at = datetime('now','localtime') WHERE id = ?`,
       [countRes[0].count, firstPhoto[0]?.thumb_path || null, targetAlbumId]
     );
 
