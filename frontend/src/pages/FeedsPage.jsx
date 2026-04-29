@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { getBands, getFeeds, getFeedDates, createFeed, uploadPhoto } from '../api';
+import { getBands, getFeeds, getFeedDates, createFeed, uploadFile } from '../api';
 import { usePagination } from '../hooks/usePagination';
 import FeedCard from '../components/FeedCard';
 import FeedDetailPage from './FeedDetailPage';
@@ -72,23 +72,25 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
     const newUploads = Array.from(files).map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       file,
-      objectUrl: URL.createObjectURL(file)
+      objectUrl: URL.createObjectURL(file),
+      isVideo: file.type.startsWith('video/')
     }));
 
     setUploadingFiles(prev => [...prev, ...newUploads]);
 
     for (const uploadObj of newUploads) {
       try {
-        const result = await uploadPhoto(uploadObj.file);
-        // result should have uniquePhotoId, thumbnailUrl, etc.
+        const result = await uploadFile(uploadObj.file);
+        // result should have uniquePhotoId, thumbnailUrl, mediaType, etc.
         setStagedPhotos(prev => [...prev, {
           id: result.uniquePhotoId,
           thumb: result.thumbnailUrl || result.originalUrl,
-          original: result.originalUrl
+          original: result.originalUrl,
+          isVideo: result.mediaType === 'video'
         }]);
       } catch (err) {
         console.error('Upload failed', err);
-        alert('Failed to upload photo');
+        alert('Failed to upload file');
       } finally {
         setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
         URL.revokeObjectURL(uploadObj.objectUrl);
@@ -217,6 +219,7 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
                 {stagedPhotos.map((photo) => (
                   <div key={photo.id} className="photo-edit-item">
                     <img className="photo-thumb" src={photo.thumb} alt="staged" />
+                    {photo.isVideo && <div className="video-play-overlay">▶</div>}
                     <button 
                       type="button"
                       className="photo-delete-badge" 
@@ -226,7 +229,9 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
                 ))}
                 {uploadingFiles.map((up) => (
                   <div key={up.id} className="photo-edit-item">
-                    <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+                    {up.isVideo
+                      ? <div className="photo-thumb video-thumb-placeholder">🎬</div>
+                      : <img className="photo-thumb" src={up.objectUrl} alt="uploading" />}
                     <div className="uploading-overlay">
                       <div className="spinner"></div>
                     </div>
@@ -238,13 +243,13 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm,video/x-msvideo"
                   multiple
                   disabled={isSaving}
                   onChange={handleFileSelect}
                 />
               </div>
-              <p className="muted" style={{ margin: 0 }}>Up to 50 photos per feed</p>
+              <p className="muted" style={{ margin: 0 }}>Up to 50 photos/videos per feed</p>
               <button className="btn btn-primary" type="submit" disabled={isSaving}>
                 {savePending || (isSaving && uploadingFiles.length > 0) ? 'Uploading…' : (isSaving ? 'Posting…' : 'Post Feed')}
               </button>

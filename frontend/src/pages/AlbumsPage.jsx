@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { getAlbums, getAlbum, createAlbum, getComments, updateAlbum, uploadPhoto, addAlbumPhoto, deleteAlbumPhoto } from '../api';
+import { getAlbums, getAlbum, createAlbum, getComments, updateAlbum, uploadFile, addAlbumPhoto, deleteAlbumPhoto } from '../api';
 import { usePagination } from '../hooks/usePagination';
 import BandSelector from '../components/BandSelector';
 import CommentSection from '../components/CommentSection';
@@ -63,15 +63,17 @@ function AlbumListView({ selectedBand, onSelectBand }) {
     const newUploads = Array.from(files).map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       file,
-      objectUrl: URL.createObjectURL(file)
+      objectUrl: URL.createObjectURL(file),
+      isVideo: file.type.startsWith('video/')
     }));
     setUploadingFiles(prev => [...prev, ...newUploads]);
     for (const uploadObj of newUploads) {
       try {
-        const result = await uploadPhoto(uploadObj.file);
+        const result = await uploadFile(uploadObj.file);
         setStagedPhotos(prev => [...prev, {
           id: result.uniquePhotoId,
-          thumb: result.thumbnailUrl || result.originalUrl
+          thumb: result.thumbnailUrl || result.originalUrl,
+          isVideo: result.mediaType === 'video'
         }]);
       } catch (err) {
         alert('Upload failed');
@@ -168,6 +170,7 @@ function AlbumListView({ selectedBand, onSelectBand }) {
                 {stagedPhotos.map((photo) => (
                   <div key={photo.id} className="photo-edit-item">
                     <img className="photo-thumb" src={photo.thumb} alt="staged" />
+                    {photo.isVideo && <div className="video-play-overlay">▶</div>}
                     <button 
                       type="button"
                       className="photo-delete-badge" 
@@ -177,7 +180,9 @@ function AlbumListView({ selectedBand, onSelectBand }) {
                 ))}
                 {uploadingFiles.map((up) => (
                   <div key={up.id} className="photo-edit-item">
-                    <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+                    {up.isVideo
+                      ? <div className="photo-thumb video-thumb-placeholder">🎬</div>
+                      : <img className="photo-thumb" src={up.objectUrl} alt="uploading" />}
                     <div className="uploading-overlay">
                       <div className="spinner"></div>
                     </div>
@@ -189,13 +194,13 @@ function AlbumListView({ selectedBand, onSelectBand }) {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm,video/x-msvideo"
                   multiple
                   disabled={saving}
                   onChange={handleFileSelect}
                 />
               </div>
-              <p className="muted" style={{ margin: 0 }}>Create album and add photos</p>
+              <p className="muted" style={{ margin: 0 }}>Create album and add photos/videos</p>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {savePending || (saving && uploadingFiles.length > 0) ? 'Uploading…' : (saving ? 'Creating…' : 'Create Album')}
               </button>
@@ -329,7 +334,8 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
     const newUploads = Array.from(files).map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       file,
-      objectUrl: URL.createObjectURL(file)
+      objectUrl: URL.createObjectURL(file),
+      isVideo: file.type.startsWith('video/')
     }));
 
     setUploadingFiles(prev => [...prev, ...newUploads]);
@@ -433,6 +439,7 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
         <div className="photo-grid">
           {Array.isArray(album.photos) && album.photos.map((photo, index) => {
             const isSelected = selectedPhotoIds.includes(photo.id);
+            const isVideo = photo.media_type === 'video';
             return (
               <div 
                 key={photo.id} 
@@ -456,6 +463,7 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
                   alt="album photo" 
                   loading="lazy"
                 />
+                {isVideo && <div className="video-play-overlay">▶</div>}
                 {selectionMode && (
                   <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
                     {isSelected ? '✓' : ''}
@@ -471,7 +479,9 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
           })}
           {uploadingFiles.map((up) => (
             <div key={up.id} className="photo-thumb-container">
-              <img className="photo-thumb" src={up.objectUrl} alt="uploading" />
+              {up.isVideo
+                ? <div className="photo-thumb video-thumb-placeholder">🎬</div>
+                : <img className="photo-thumb" src={up.objectUrl} alt="uploading" />}
               <div className="uploading-overlay">
                 <div className="spinner"></div>
               </div>
@@ -482,14 +492,13 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
           )}
         </div>
 
-        {/* Add photos action */}
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-color)' }}>
-          <p className="muted" style={{ marginBottom: 6 }}>Add photos to album:</p>
+          <p className="muted" style={{ marginBottom: 6 }}>Add photos/videos to album:</p>
           <div className="file-input-wrap">
             <input
               ref={fileRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
+              accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm,video/x-msvideo"
               multiple
               disabled={saving}
               onChange={handleFileSelect}

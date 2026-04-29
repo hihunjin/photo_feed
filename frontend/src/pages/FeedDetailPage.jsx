@@ -102,7 +102,8 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
     const newUploads = Array.from(files).map((file, i) => ({
       id: `temp-${Date.now()}-${i}`,
       file,
-      objectUrl: URL.createObjectURL(file)
+      objectUrl: URL.createObjectURL(file),
+      isVideo: file.type.startsWith('video/')
     }));
 
     setUploadingFiles(prev => [...prev, ...newUploads]);
@@ -216,6 +217,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
           <div className="photo-grid">
             {currentPhotos.map((photo, index) => {
               const isSelected = selectedPhotoIds.includes(photo.id);
+              const isVideo = photo.media_type === 'video';
               return (
                 <div 
                   key={photo.id} 
@@ -239,6 +241,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                     alt="feed attachment" 
                     loading="lazy"
                   />
+                  {isVideo && <div className="video-play-overlay">▶</div>}
                   {selectionMode && (
                     <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
                       {isSelected ? '✓' : ''}
@@ -298,7 +301,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
             {(currentPhotos.length > 0 || uploadingFiles.length > 0) && (
               <div>
                 <p className="muted" style={{ marginBottom: 8 }}>
-                  Photos (click ✕ to remove):
+                  Photos & Videos (click ✕ to remove):
                 </p>
                 <div className="photo-grid">
                   {currentPhotos.map((photo) => (
@@ -308,6 +311,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                         src={photo.thumb_path || photo.original_path}
                         alt="photo"
                       />
+                      {photo.media_type === 'video' && <div className="video-play-overlay">▶</div>}
                       <button
                         className="photo-delete-badge"
                         onClick={() => handleDeletePhoto(photo.id)}
@@ -321,11 +325,9 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                   ))}
                   {uploadingFiles.map((up) => (
                     <div key={up.id} className="photo-edit-item">
-                      <img
-                        className="photo-thumb"
-                        src={up.objectUrl}
-                        alt="uploading"
-                      />
+                      {up.isVideo
+                        ? <div className="photo-thumb video-thumb-placeholder">🎬</div>
+                        : <img className="photo-thumb" src={up.objectUrl} alt="uploading" />}
                       <div className="uploading-overlay">
                         <div className="spinner"></div>
                       </div>
@@ -337,12 +339,12 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
 
             {/* Add new photos */}
             <div>
-              <p className="muted" style={{ marginBottom: 6 }}>Add new photos:</p>
+              <p className="muted" style={{ marginBottom: 6 }}>Add new photos/videos:</p>
               <div className="file-input-wrap">
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime,video/webm,video/x-msvideo"
                   multiple
                   disabled={saving || savePending}
                   onChange={handleFileSelect}

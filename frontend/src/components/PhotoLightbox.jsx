@@ -7,6 +7,7 @@ export default function PhotoLightbox({ photos, initialIndex, onClose }) {
   const [isDragging, setIsDragging] = useState(false);
 
   const photo = photos[currentIndex];
+  const isVideo = photo?.media_type === 'video';
 
   const handlePrev = useCallback(() => {
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : photos.length - 1));
@@ -63,22 +64,35 @@ export default function PhotoLightbox({ photos, initialIndex, onClose }) {
         className="lightbox-content"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        style={{ touchAction: 'none', userSelect: 'none' }}
+        onMouseDown={!isVideo ? handleMouseDown : undefined}
+        onMouseUp={!isVideo ? handleMouseUp : undefined}
+        onMouseLeave={!isVideo ? handleMouseLeave : undefined}
+        style={{ touchAction: isVideo ? 'auto' : 'none', userSelect: 'none' }}
       >
         <div className="lightbox-image-container">
-          <img 
-            key={photo.id}
-            src={photo.original_path} 
-            alt={`Photo ${currentIndex + 1}`} 
-            className="lightbox-image fade-in"
-            draggable={false}
-          />
-          <div className="lightbox-spinner-container">
-            <div className="spinner"></div>
-          </div>
+          {isVideo ? (
+            <video
+              key={photo.id}
+              src={photo.original_path}
+              className="lightbox-image fade-in"
+              controls
+              autoPlay
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+            />
+          ) : (
+            <>
+              <img 
+                key={photo.id}
+                src={photo.original_path} 
+                alt={`Photo ${currentIndex + 1}`} 
+                className="lightbox-image fade-in"
+                draggable={false}
+              />
+              <div className="lightbox-spinner-container">
+                <div className="spinner"></div>
+              </div>
+            </>
+          )}
         </div>
 
         {photos.length > 1 && (

@@ -94,7 +94,7 @@ function performInitialize(resolve, reject) {
                   max_file_size_mb, 
                   allowed_mime_types
                 ) VALUES (?, ?, ?, ?, ?)`,
-                [1, 50, 1000, 20, JSON.stringify(['image/jpeg', 'image/png', 'image/webp', 'image/heic'])],
+                [1, 50, 1000, 500, JSON.stringify(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska'])],
                 (err) => {
                   if (err && err.code !== 'SQLITE_CONSTRAINT') {
                     console.error('Policy initialization error:', err);
@@ -290,16 +290,16 @@ function getInstance() {
  * Ensures that necessary columns exist in the database (simple migration system)
  */
 async function runMigrations() {
-  const tables = ['feed_photos', 'album_photos'];
-  for (const table of tables) {
+  // Migrate feed_photos and album_photos
+  const joinTables = ['feed_photos', 'album_photos'];
+  for (const table of joinTables) {
     try {
-      // Check if unique_photo_id exists
       const columns = await new Promise((res, rej) => {
         db.all(`PRAGMA table_info(${table})`, (err, rows) => {
           if (err) rej(err); else res(rows);
         });
       });
-      
+
       const hasUniquePhotoId = columns.some(c => c.name === 'unique_photo_id');
       if (!hasUniquePhotoId) {
         console.log(`Adding missing column unique_photo_id to ${table}`);
@@ -309,9 +309,77 @@ async function runMigrations() {
           });
         });
       }
+
+      const hasMediaType = columns.some(c => c.name === 'media_type');
+      if (!hasMediaType) {
+        console.log(`Adding missing column media_type to ${table}`);
+        await new Promise((res, rej) => {
+          db.run(`ALTER TABLE ${table} ADD COLUMN media_type TEXT NOT NULL DEFAULT 'image'`, (err) => {
+            if (err) rej(err); else res();
+          });
+        });
+      }
     } catch (err) {
       console.error(`Migration error for table ${table}:`, err);
     }
+  }
+
+  // Migrate unique_photos
+  try {
+    const upColumns = await new Promise((res, rej) => {
+      db.all(`PRAGMA table_info(unique_photos)`, (err, rows) => {
+        if (err) rej(err); else res(rows);
+      });
+    });
+    const hasMediaType = upColumns.some(c => c.name === 'media_type');
+    if (!hasMediaType) {
+      console.log('Adding missing column media_type to unique_photos');
+      await new Promise((res, rej) => {
+        db.run(`ALTER TABLE unique_photos ADD COLUMN media_type TEXT NOT NULL DEFAULT 'image'`, (err) => {
+          if (err) rej(err); else res();
+        });
+      });
+    }
+
+    const hasDuration = upColumns.some(c => c.name === 'duration');
+    if (!hasDuration) {
+      console.log('Adding missing column duration to unique_photos');
+      await new Promise((res, rej) => {
+        db.run(`ALTER TABLE unique_photos ADD COLUMN duration REAL`, (err) => {
+          if (err) rej(err); else res();
+        });
+      });
+    }
+  } catch (err) {
+    console.error('Migration error for unique_photos:', err);
+  }
+
+  // Migrate upload_policies to include video MIME types
+  try {
+    const policy = await new Promise((res, rej) => {
+      db.get('SELECT * FROM upload_policies WHERE id = 1', (err, row) => {
+        if (err) rej(err); else res(row);
+      });
+    });
+    if (policy) {
+      let mimeTypes = [];
+      try { mimeTypes = JSON.parse(policy.allowed_mime_types || '[]'); } catch (_) {}
+      const videoTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska'];
+      const needsUpdate = videoTypes.some(vt => !mimeTypes.includes(vt));
+      if (needsUpdate) {
+        const newTypes = [...new Set([...mimeTypes, ...videoTypes])];
+        await new Promise((res, rej) => {
+          db.run(
+            `UPDATE upload_policies SET allowed_mime_types = ?, max_file_size_mb = 500 WHERE id = 1`,
+            [JSON.stringify(newTypes)],
+            (err) => { if (err) rej(err); else res(); }
+          );
+        });
+        console.log('✓ Upload policy updated to include video MIME types');
+      }
+    }
+  } catch (err) {
+    console.error('Migration error for upload_policies:', err);
   }
 }
 

@@ -62,7 +62,7 @@ async function getAllFeeds(req, res) {
     for (const feed of result) {
       if (feed.photo_count > 0) {
         const photos = await db.query(
-          `SELECT id, thumb_path, original_path FROM feed_photos WHERE feed_id = ? ORDER BY sort_order LIMIT 3`,
+          `SELECT id, thumb_path, original_path, media_type FROM feed_photos WHERE feed_id = ? ORDER BY sort_order LIMIT 3`,
           [feed.id]
         );
         feed.preview_photos = photos;
@@ -108,7 +108,7 @@ async function getFeedById(req, res) {
 
     // Include full text and photo details
     const photos = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM feed_photos WHERE feed_id = ? ORDER BY sort_order`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM feed_photos WHERE feed_id = ? ORDER BY sort_order`,
       [feedId]
     );
 
@@ -154,9 +154,9 @@ async function createFeed(req, res) {
       for (let index = 0; index < savedFiles.length; index += 1) {
         const savedFile = savedFiles[index];
         await db.query(
-          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdFeedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
+          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [createdFeedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId, savedFile.mediaType || 'image']
         );
       }
     }
@@ -172,9 +172,9 @@ async function createFeed(req, res) {
 
         for (const up of uniquePhotos) {
           await db.query(
-            `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [createdFeedId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+            `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [createdFeedId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id, up.media_type || 'image']
           );
         }
       }
@@ -188,7 +188,7 @@ async function createFeed(req, res) {
 
     const refreshedFeed = await db.query(`SELECT * FROM feeds WHERE id = ?`, [createdFeedId]);
     const photos = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM feed_photos WHERE feed_id = ? ORDER BY sort_order`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM feed_photos WHERE feed_id = ? ORDER BY sort_order`,
       [createdFeedId]
     );
 
@@ -319,9 +319,9 @@ async function addFeedPhoto(req, res) {
     const savedFiles = await saveUploadedFiles({ files: [file], prefix: 'feed', targetId: feedId });
     const savedFile = savedFiles[0];
     await db.query(
-      `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [feedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, nextOrder, savedFile.uniquePhotoId]
+      `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [feedId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, nextOrder, savedFile.uniquePhotoId, savedFile.mediaType || 'image']
     );
 
     // Recalculate photo_count
@@ -335,7 +335,7 @@ async function addFeedPhoto(req, res) {
     );
 
     const photo = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM feed_photos WHERE feed_id = ? ORDER BY id DESC LIMIT 1`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM feed_photos WHERE feed_id = ? ORDER BY id DESC LIMIT 1`,
       [feedId]
     );
 
@@ -445,9 +445,9 @@ async function copyPhotosToAlbum(req, res) {
 
       if (exists.length === 0) {
         await db.query(
-          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [targetAlbumId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id]
+          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [targetAlbumId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id, photo.media_type || 'image']
         );
       }
     }

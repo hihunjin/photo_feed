@@ -3,7 +3,10 @@ const multer = require('multer');
 const router = express.Router({ mergeParams: true });
 const feedController = require('../controllers/feedController');
 const { authMiddleware } = require('../middleware/auth');
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB for videos
+});
 const { requireAdmin } = require('../middleware/adminCheck');
 
 // GET /:bandId/feeds/dates - Get dates with feeds (public)

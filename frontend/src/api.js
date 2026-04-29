@@ -172,10 +172,10 @@ export function deleteAlbumPhoto(albumId, photoId) {
   });
 }
 
-export async function uploadPhoto(file) {
+export async function uploadFile(file) {
   const token = localStorage.getItem('token');
   const formData = new FormData();
-  formData.append('photo', file);
+  formData.append('file', file);
 
   const res = await fetch('/api/photos/upload', {
     method: 'POST',

@@ -710,6 +710,34 @@ a:hover {
   z-index: 2;
 }
 
+/* ── Video overlays ── */
+.video-play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 1.2rem;
+  pointer-events: none;
+  z-index: 3;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
+.video-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 1.6rem;
+  width: 88px;
+  height: 88px;
+}
+
 /* ──────────────────────────────────────────
    Responsive
    ────────────────────────────────────────── */

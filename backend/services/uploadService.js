@@ -11,8 +11,25 @@ const MIME_EXTENSION_MAP = {
   'image/png': '.png',
   'image/webp': '.webp',
   'image/heic': '.heic',
-  'image/heif': '.heif'
+  'image/heif': '.heif',
+  // Videos
+  'video/mp4': '.mp4',
+  'video/quicktime': '.mov',
+  'video/x-msvideo': '.avi',
+  'video/webm': '.webm',
+  'video/x-matroska': '.mkv',
+  'video/mpeg': '.mpeg',
+  'video/3gpp': '.3gp'
 };
+
+const VIDEO_MIME_TYPES = new Set([
+  'video/mp4', 'video/quicktime', 'video/x-msvideo',
+  'video/webm', 'video/x-matroska', 'video/mpeg', 'video/3gpp'
+]);
+
+function isVideoMimeType(mimetype) {
+  return VIDEO_MIME_TYPES.has(mimetype);
+}
 
 async function ensureUploadDirectories() {
   await fs.mkdir(ORIGINALS_DIR, { recursive: true });
@@ -145,10 +162,12 @@ async function saveUploadedFiles({ files, prefix, targetId }) {
 
     await fs.writeFile(originalFsPath, file.buffer);
 
+    const mediaType = isVideoMimeType(file.mimetype) ? 'video' : 'image';
+
     // Record in unique_photos
     const insertRes = await db.query(
-      'INSERT INTO unique_photos (hash, original_path, thumb_path, size, mimetype) VALUES (?, ?, ?, ?, ?) RETURNING id',
-      [hash, originalUrl, null, file.size, file.mimetype]
+      'INSERT INTO unique_photos (hash, original_path, thumb_path, size, mimetype, media_type) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+      [hash, originalUrl, null, file.size, file.mimetype, mediaType]
     );
     const uniqueId = insertRes[0].id;
 
@@ -164,6 +183,7 @@ async function saveUploadedFiles({ files, prefix, targetId }) {
       originalUrl,
       thumbnailUrl: originalUrl, // Will be updated by background worker
       mimetype: file.mimetype,
+      mediaType,
       size: file.size,
       uniquePhotoId: uniqueId,
       isDuplicate: false
@@ -180,6 +200,7 @@ module.exports = {
   saveUploadedFiles,
   getPublicOriginalUrl,
   getFilesystemPathFromPublicUrl,
+  isVideoMimeType,
   ORIGINALS_DIR,
   PUBLIC_ORIGINALS_BASE
 };

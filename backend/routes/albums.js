@@ -3,7 +3,10 @@ const multer = require('multer');
 const router = express.Router({ mergeParams: true });
 const albumController = require('../controllers/albumController');
 const { authMiddleware } = require('../middleware/auth');
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB for videos
+});
 
 router.get('/:bandId/albums', albumController.getAllAlbums);
 router.post('/:bandId/albums', authMiddleware, upload.array('photos', 1000), albumController.createAlbum);

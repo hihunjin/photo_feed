@@ -55,7 +55,7 @@ async function getAlbumById(req, res) {
     }
 
     const photos = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM album_photos WHERE album_id = ? ORDER BY sort_order`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM album_photos WHERE album_id = ? ORDER BY sort_order`,
       [albumId]
     );
 
@@ -103,9 +103,9 @@ async function createAlbum(req, res) {
         const savedFile = savedFiles[index];
         if (!coverThumb) coverThumb = savedFile.thumbnailUrl;
         await db.query(
-          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [createdAlbumId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId]
+          `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [createdAlbumId, savedFile.originalUrl, savedFile.thumbnailUrl, null, null, totalPhotoCount++, savedFile.uniquePhotoId, savedFile.mediaType || 'image']
         );
       }
     }
@@ -121,9 +121,9 @@ async function createAlbum(req, res) {
         for (const up of uniquePhotos) {
           if (!coverThumb) coverThumb = up.thumb_path;
           await db.query(
-            `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [createdAlbumId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id]
+            `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [createdAlbumId, up.original_path, up.thumb_path || up.original_path, up.width, up.height, totalPhotoCount++, up.id, up.media_type || 'image']
           );
         }
       }
@@ -137,7 +137,7 @@ async function createAlbum(req, res) {
 
     const refreshedAlbum = await db.query(`SELECT * FROM albums WHERE id = ?`, [createdAlbumId]);
     const photos = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM album_photos WHERE album_id = ? ORDER BY sort_order`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM album_photos WHERE album_id = ? ORDER BY sort_order`,
       [createdAlbumId]
     );
 
@@ -259,9 +259,9 @@ async function copyPhotosToFeed(req, res) {
 
       if (exists.length === 0) {
         await db.query(
-          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [targetFeedId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id]
+          `INSERT INTO feed_photos (feed_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [targetFeedId, photo.original_path, photo.thumb_path, photo.width, photo.height, nextOrder++, photo.unique_photo_id, photo.media_type || 'image']
         );
       }
     }
@@ -298,14 +298,13 @@ async function addAlbumPhoto(req, res) {
     );
     const nextOrder = (maxOrder[0]?.max_order ?? -1) + 1;
 
-    const { saveUploadedFiles } = require('../services/uploadService');
     const savedFiles = await saveUploadedFiles({ files: [file], prefix: 'album', targetId: albumId });
     const savedFile = savedFiles[0];
 
     await db.query(
-      `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [albumId, savedFile.originalUrl, savedFile.thumbnailUrl || savedFile.originalUrl, null, null, nextOrder, savedFile.uniquePhotoId]
+      `INSERT INTO album_photos (album_id, original_path, thumb_path, width, height, sort_order, unique_photo_id, media_type) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [albumId, savedFile.originalUrl, savedFile.thumbnailUrl || savedFile.originalUrl, null, null, nextOrder, savedFile.uniquePhotoId, savedFile.mediaType || 'image']
     );
 
     const countResult = await db.query(`SELECT COUNT(*) AS cnt FROM album_photos WHERE album_id = ?`, [albumId]);
@@ -315,7 +314,7 @@ async function addAlbumPhoto(req, res) {
     );
 
     const photo = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order FROM album_photos WHERE album_id = ? ORDER BY id DESC LIMIT 1`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM album_photos WHERE album_id = ? ORDER BY id DESC LIMIT 1`,
       [albumId]
     );
 
