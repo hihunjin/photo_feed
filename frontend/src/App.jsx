@@ -54,7 +54,7 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-brand">
           <div className="topbar-logo">PF</div>
-          <h1>Photo Feed</h1>
+          <h1>지율이네</h1>
         </div>
         <div className="topbar-actions">
           <span className="topbar-user">{user.username}</span>

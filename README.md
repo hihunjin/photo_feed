@@ -258,6 +258,49 @@ npm run dev
 - **CSS**: Utility-based (cards, grids, buttons, forms)
 - **Features**: Login, band list, feed list with sort/pagination, feed creation with photo upload, feed detail with photo gallery, comment reading and posting
 
+## Resetting All Data (Full Wipe)
+
+> ⚠️ **Warning**: These commands permanently delete all photos, feeds, comments, and user data. This cannot be undone.
+
+### Step 1: Stop the container
+```bash
+cd /volume1/photo_feed
+docker compose down
+```
+
+### Step 2: Delete the data
+
+**If using bind mount** (`/volume1/photo_feed_data`):
+```bash
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3-wal
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3-shm
+rm -rf /volume1/photo_feed_data/originals/*
+rm -rf /volume1/photo_feed_data/thumbnails/*
+```
+
+**If using named Docker volume** (`photo_data`):
+```bash
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/photo_feed.sqlite3*
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/originals/*
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/thumbnails/*
+```
+
+### Step 3: Restart the container
+```bash
+docker compose up -d
+```
+The DB is recreated automatically on startup — confirm with `docker logs --tail 5 photo_feed`.
+
+### Step 4: Clear browser storage and re-login (important!)
+Resetting the DB invalidates all existing JWT tokens. Clear the old token from your browser:
+1. Open DevTools (F12)
+2. Go to **Application** tab → **Local Storage** → select the NAS URL
+3. Delete all entries
+4. Hard refresh (`Ctrl+Shift+R`) and log in again with your DSM credentials
+
+---
+
 ### Next Steps (Post-MVP)
 
 1. **E2E Testing**: Add Playwright tests in `frontend/test/` for login, navigation, pagination

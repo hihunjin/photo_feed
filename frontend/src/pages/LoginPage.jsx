@@ -28,7 +28,7 @@ export default function LoginPage({ onLogin }) {
       <div className="card login-card grid" style={{ gap: 0 }}>
         <div className="login-header">
           <div className="topbar-logo" style={{ width: 48, height: 48, fontSize: 18, margin: '0 auto 16px', borderRadius: 14 }}>PF</div>
-          <h1>Photo Feed</h1>
+          <h1>지율이네</h1>
           <p className="muted" style={{ marginTop: 6 }}>Sign in to view bands, feeds, and albums.</p>
         </div>
         <form className="grid" onSubmit={handleSubmit} style={{ gap: 14 }}>

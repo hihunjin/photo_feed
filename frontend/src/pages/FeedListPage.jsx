@@ -69,7 +69,7 @@ export default function FeedListPage({ user, onLogout }) {
     <div className="app-shell grid" style={{ gap: 20 }}>
       <header className="card row" style={{ justifyContent: 'space-between' }}>
         <div>
-          <h1 className="title">Photo Feed</h1>
+          <h1 className="title">지율이네</h1>
           <p className="muted">Signed in as {user.username} ({user.role})</p>
         </div>
         <button className="secondary" onClick={onLogout}>Logout</button>

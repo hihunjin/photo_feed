@@ -265,3 +265,47 @@ environment:
 - 1GB RAM 환경: docker-compose.yml의 `mem_limit`을 보수적으로 설정하세요 (예: 512m).
 - 보안: 외부 접근 시 DSM 리버스 프록시 또는 프록시+TLS 사용 권장.
 - 데이터 영속성: `volumes` 설정으로 컨테이너 재시작 후에도 DB·사진 파일 유지.
+
+---
+
+## 9. 데이터 초기화 (전체 삭제 & DB 리셋)
+
+> ⚠️ **경고**: 아래 명령은 모든 사진, 피드, 댓글, 사용자 데이터를 **영구 삭제**합니다. 복구할 수 없습니다.
+
+### 9-1) 컨테이너 중지
+```bash
+cd /volume1/photo_feed
+docker compose down
+```
+
+### 9-2) 데이터 삭제
+
+**bind mount 방식** (`/volume1/photo_feed_data` 사용 시):
+```bash
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3-wal
+rm -rf /volume1/photo_feed_data/photo_feed.sqlite3-shm
+rm -rf /volume1/photo_feed_data/originals/*
+rm -rf /volume1/photo_feed_data/thumbnails/*
+```
+
+**named volume 방식** (`photo_data` 볼륨 사용 시):
+```bash
+# 볼륨 내 데이터만 삭제 (볼륨 자체는 유지)
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/photo_feed.sqlite3*
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/originals/*
+rm -rf /var/lib/docker/volumes/photo_feed_photo_data/_data/thumbnails/*
+```
+
+### 9-3) 컨테이너 재시작
+```bash
+docker compose up -d
+```
+재시작 시 DB가 자동으로 새로 생성됩니다 (`✓ Database initialized successfully` 로그 확인).
+
+### 9-4) 재로그인 (중요!)
+DB를 초기화하면 기존 JWT 토큰이 무효화됩니다.  
+브라우저에서 **로컬 스토리지를 초기화**한 후 다시 로그인하세요:
+1. 브라우저 개발자 도구 열기 (F12)
+2. **Application** 탭 → **Local Storage** → NAS URL 항목 전체 삭제
+3. 페이지 새로고침 후 DSM 계정으로 재로그인
