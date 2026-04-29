@@ -9,7 +9,9 @@ export default function FeedCard({ feed, onOpen }) {
         <strong>Feed #{feed.id}</strong>
         <span className="muted">{new Date(feed.created_at).toLocaleString()}</span>
       </div>
-      <p className="feed-preview" style={{ margin: '8px 0' }}>{feed.preview_text}</p>
+      <p className="feed-preview" style={{ margin: '8px 0' }}>
+        {feed.preview_text || <em className="muted">(빈 글)</em>}
+      </p>
 
       {/* Up to 3 photo thumbnails */}
       {previews.length > 0 && (

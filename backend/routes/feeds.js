@@ -6,6 +6,9 @@ const { authMiddleware } = require('../middleware/auth');
 const upload = multer({ storage: multer.memoryStorage() });
 const { requireAdmin } = require('../middleware/adminCheck');
 
+// GET /:bandId/feeds/dates - Get dates with feeds (public)
+router.get('/:bandId/feeds/dates', feedController.getFeedDates);
+
 // GET /:bandId/feeds - List feeds (public)
 router.get('/:bandId/feeds', feedController.getAllFeeds);
 

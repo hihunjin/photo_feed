@@ -33,6 +33,11 @@ async function getAllFeeds(req, res) {
       params.push(`%${search}%`);
     }
 
+    if (req.query.date) {
+      where += ` AND DATE(created_at) = ?`;
+      params.push(req.query.date);
+    }
+
     if (cursor) {
       if (sort === 'newest' || sort === 'new-comments') {
         where += ` AND created_at < ?`;
@@ -121,13 +126,10 @@ async function getFeedById(req, res) {
 async function createFeed(req, res) {
   try {
     const { bandId } = req.params;
-    const { text, photoIds } = req.body;
+    const { photoIds } = req.body;
+    const text = req.body.text || '';
     const userId = req.user.id;
     const files = req.files || [];
-
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
-    }
 
     const bandCheck = await db.query(`SELECT id FROM bands WHERE id = ?`, [bandId]);
     if (bandCheck.length === 0) {
@@ -466,6 +468,31 @@ async function copyPhotosToAlbum(req, res) {
   }
 }
 
+// GET /api/bands/:bandId/feeds/dates - Get distinct dates that have feeds
+async function getFeedDates(req, res) {
+  try {
+    const { bandId } = req.params;
+
+    const bandCheck = await db.query(`SELECT id FROM bands WHERE id = ?`, [bandId]);
+    if (bandCheck.length === 0) {
+      return res.status(404).json({ error: 'Band not found' });
+    }
+
+    const rows = await db.query(
+      `SELECT DISTINCT DATE(created_at) AS feed_date
+       FROM feeds
+       WHERE band_id = ?
+       ORDER BY feed_date DESC`,
+      [bandId]
+    );
+
+    res.json({ dates: rows.map(r => r.feed_date) });
+  } catch (err) {
+    console.error('Error fetching feed dates:', err);
+    res.status(500).json({ error: 'Failed to fetch feed dates' });
+  }
+}
+
 module.exports = {
   getAllFeeds,
   getFeedById,
@@ -475,5 +502,6 @@ module.exports = {
   adminDeleteFeed,
   addFeedPhoto,
   deleteFeedPhoto,
-  copyPhotosToAlbum
+  copyPhotosToAlbum,
+  getFeedDates
 };

@@ -10,8 +10,9 @@ RUN npm run build
 FROM node:18-alpine
 WORKDIR /app
 
-# Install build dependencies for native modules (sqlite3, sharp)
-RUN apk add --no-cache python3 make g++
+# Install build dependencies for native modules (sqlite3, sharp) and timezone
+RUN apk add --no-cache python3 make g++ tzdata
+ENV TZ=Asia/Seoul
 
 # Install dependencies first for better caching
 COPY package*.json ./

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
-import { getBands, getFeeds, createFeed, uploadPhoto } from '../api';
+import { getBands, getFeeds, getFeedDates, createFeed, uploadPhoto } from '../api';
 import { usePagination } from '../hooks/usePagination';
 import FeedCard from '../components/FeedCard';
 import FeedDetailPage from './FeedDetailPage';
 import BandSelector from '../components/BandSelector';
+import CalendarPicker from '../components/CalendarPicker';
 
 export default function FeedsPage({ user, selectedBand, onSelectBand }) {
   const navigate = useNavigate();
@@ -43,10 +44,15 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
   const [isSaving, setIsSaving] = useState(false);
   const [savePending, setSavePending] = useState(false);
 
+  // Calendar state
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [dateFilter, setDateFilter] = useState(null);
+  const [feedDates, setFeedDates] = useState([]);
+
   const feedLoader = useMemo(() => async ({ cursor }) => {
     if (!selectedBand) return { items: [], hasMore: false, cursor: null };
-    return getFeeds(selectedBand.id, { sort, limit: 10, cursor });
-  }, [selectedBand, sort]);
+    return getFeeds(selectedBand.id, { sort, limit: 10, cursor, date: dateFilter || undefined });
+  }, [selectedBand, sort, dateFilter]);
 
   const { items: feeds, loading, error, hasMore, loadMore, refresh, setParams } = usePagination(feedLoader, {});
 
@@ -54,6 +60,11 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
     if (selectedBand) {
       setParams({});
       setShowSearch(false);
+      setDateFilter(null);
+      // Load available dates for calendar
+      getFeedDates(selectedBand.id)
+        .then(data => setFeedDates(data.dates || []))
+        .catch(() => setFeedDates([]));
     }
   }, [selectedBand, sort, setParams]);
 
@@ -119,7 +130,6 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
 
   async function handleCreate(e) {
     e.preventDefault();
-    if (!feedText.trim()) return;
 
     if (uploadingFiles.length > 0) {
       setSavePending(true);
@@ -144,6 +154,22 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
               <button className="btn btn-ghost btn-sm" onClick={() => setShowSearch(true)} title="Search feeds">
                 🔍 Search
               </button>
+              <div style={{ position: 'relative' }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowCalendar(v => !v)} title="Calendar search">
+                  📅
+                </button>
+                {showCalendar && (
+                  <CalendarPicker
+                    availableDates={feedDates}
+                    selectedDate={dateFilter}
+                    onSelectDate={(d) => {
+                      setDateFilter(d);
+                      setShowCalendar(false);
+                    }}
+                    onClose={() => setShowCalendar(false)}
+                  />
+                )}
+              </div>
               <select
                 className="select"
                 name="sort"
@@ -160,6 +186,14 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
               </button>
             </div>
           </div>
+
+          {/* Date filter chip */}
+          {dateFilter && (
+            <div className="date-filter-chip">
+              📅 {dateFilter}
+              <button onClick={() => setDateFilter(null)} title="Clear date filter">✕</button>
+            </div>
+          )}
 
           {/* Search pop-up modal */}
           {showSearch && (

@@ -14,6 +14,7 @@ services:
       - PORT=8081
       - DATABASE=/app/data/photo_feed.sqlite3
       - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-me}
+      - TZ=Asia/Seoul
     restart: unless-stopped
     # Limited RAM optimization (512MB for 1GB NAS)
     mem_limit: 512m

@@ -64,7 +64,12 @@ export function getFeeds(bandId, params = {}) {
   if (params.limit) search.set('limit', String(params.limit));
   if (params.cursor) search.set('cursor', params.cursor);
   if (params.search) search.set('search', params.search);
+  if (params.date) search.set('date', params.date);
   return request(`/api/bands/${bandId}/feeds${search.toString() ? `?${search}` : ''}`);
+}
+
+export function getFeedDates(bandId) {
+  return request(`/api/bands/${bandId}/feeds/dates`);
 }
 
 export function getFeed(feedId) {
