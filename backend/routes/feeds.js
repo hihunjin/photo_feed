@@ -1,12 +1,8 @@
 const express = require('express');
-const multer = require('multer');
 const router = express.Router({ mergeParams: true });
 const feedController = require('../controllers/feedController');
 const { authMiddleware } = require('../middleware/auth');
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 } // 500MB for videos
-});
+const { diskUpload } = require('../middleware/diskUpload');
 const { requireAdmin } = require('../middleware/adminCheck');
 
 // GET /:bandId/feeds/dates - Get dates with feeds (public)
@@ -16,7 +12,7 @@ router.get('/:bandId/feeds/dates', feedController.getFeedDates);
 router.get('/:bandId/feeds', feedController.getAllFeeds);
 
 // POST /:bandId/feeds - Create feed (protected)
-router.post('/:bandId/feeds', authMiddleware, upload.array('photos', 50), feedController.createFeed);
+router.post('/:bandId/feeds', authMiddleware, diskUpload.array('photos', 50), feedController.createFeed);
 
 // Separate router for feed-specific routes (not nested under bands)
 const feedRouter = express.Router();
@@ -33,7 +29,7 @@ feedRouter.delete('/:feedId', authMiddleware, feedController.deleteFeed);
 feedRouter.delete('/:feedId/admin-delete', authMiddleware, requireAdmin, feedController.adminDeleteFeed);
 
 // POST /feeds/:feedId/photos - Add a single photo (protected)
-feedRouter.post('/:feedId/photos', authMiddleware, upload.single('photo'), feedController.addFeedPhoto);
+feedRouter.post('/:feedId/photos', authMiddleware, diskUpload.single('photo'), feedController.addFeedPhoto);
 
 // DELETE /feeds/:feedId/photos/:photoId - Delete a single photo (protected)
 feedRouter.delete('/:feedId/photos/:photoId', authMiddleware, feedController.deleteFeedPhoto);

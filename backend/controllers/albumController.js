@@ -314,7 +314,7 @@ async function addAlbumPhoto(req, res) {
     );
 
     const photo = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM album_photos WHERE album_id = ? ORDER BY id DESC LIMIT 1`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type, unique_photo_id FROM album_photos WHERE album_id = ? ORDER BY id DESC LIMIT 1`,
       [albumId]
     );
 

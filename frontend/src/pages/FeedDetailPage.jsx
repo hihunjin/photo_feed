@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { getFeed, getComments, updateFeed, addFeedPhoto, deleteFeedPhoto } from '../api';
+import { useThumbnailPoller } from '../hooks/useThumbnailPoller';
 import CommentSection from '../components/CommentSection';
 import PhotoLightbox from '../components/PhotoLightbox';
 import CrossLinkModal from '../components/CrossLinkModal';
@@ -18,6 +19,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
   const [saving, setSaving] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState([]);
+  const [uploadError, setUploadError] = useState('');
   const fileInputRef = useRef(null);
 
   // Selection state
@@ -37,7 +39,12 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
   const loadFeed = useCallback(async () => {
     try {
       const data = await getFeed(feedId);
-      setFeed(data);
+      // Mark photos whose thumbnail hasn't been generated yet (thumb_path is null or same as original)
+      const photosWithPending = (data.photos || []).map(p => ({
+        ...p,
+        thumbPending: !p.thumb_path || p.thumb_path === p.original_path
+      }));
+      setFeed({ ...data, photos: photosWithPending });
     } catch (err) {
       setError(err.message);
     }
@@ -79,6 +86,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
   function openEdit() {
     setEditText(feed.text);
     setUploadProgress('');
+    setUploadError('');
     setUploadingFiles([]);
     setEditing(true);
   }
@@ -111,20 +119,50 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
     for (const uploadObj of newUploads) {
       try {
         const newPhoto = await addFeedPhoto(feedId, uploadObj.file);
+        // Mark as thumbPending — worker hasn't run yet
         setFeed(prev => ({
           ...prev,
-          photos: [...(prev.photos || []), newPhoto],
+          photos: [...(prev.photos || []), {
+            ...newPhoto,
+            thumbPending: true,
+            // unique_photo_id is now returned by the backend for polling
+          }],
           photo_count: (prev.photo_count || 0) + 1
         }));
       } catch (err) {
         console.error('Failed to upload photo', err);
-        alert('Failed to upload photo: ' + err.message);
+        // Show inline error and cancel any pending save
+        const msg = err.message && err.message !== 'Upload failed'
+          ? err.message
+          : `Failed to upload "${uploadObj.file.name}" — file may exceed the 10 GB limit.`;
+        setUploadError(msg);
+        setSavePending(false);
+        setSaving(false);
       } finally {
         setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
         URL.revokeObjectURL(uploadObj.objectUrl);
       }
     }
   };
+
+  // Build a pollable list from feed photos that still need thumbnails
+  // useThumbnailPoller expects items with { id (= uniquePhotoId), thumbPending }
+  const pollablePhotos = (feed?.photos || [])
+    .filter(p => p.thumbPending && p.unique_photo_id)
+    .map(p => ({ id: p.unique_photo_id, thumbPending: true }));
+
+  const handleThumbReady = useCallback((uniquePhotoId, thumbUrl) => {
+    setFeed(prev => ({
+      ...prev,
+      photos: (prev.photos || []).map(p =>
+        p.unique_photo_id === uniquePhotoId
+          ? { ...p, thumb_path: thumbUrl, thumbPending: false }
+          : p
+      )
+    }));
+  }, []);
+
+  useThumbnailPoller(pollablePhotos, handleThumbReady);
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -134,11 +172,12 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
   };
 
   useEffect(() => {
-    if (savePending && uploadingFiles.length === 0) {
+    // Only proceed once all uploads have finished AND none failed
+    if (savePending && uploadingFiles.length === 0 && !uploadError) {
       setSavePending(false);
       performSave();
     }
-  }, [savePending, uploadingFiles.length]);
+  }, [savePending, uploadingFiles.length, uploadError]);
 
   async function performSave() {
     setSaving(true);
@@ -167,6 +206,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
     if (saving || savePending) return; // prevent closing while saving
     setEditing(false);
     setUploadProgress('');
+    setUploadError('');
     setUploadingFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -223,6 +263,7 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                   key={photo.id} 
                 className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
                 onClick={() => {
+                  if (photo.thumbPending) return; // don't open lightbox while pending
                   if (selectionMode) {
                     setSelectedPhotoIds(prev => 
                       prev.includes(photo.id) 
@@ -233,16 +274,27 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
                     setLightboxIndex(index);
                   }
                 }}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: photo.thumbPending ? 'default' : 'pointer' }}
               >
-                  <img 
-                    className="photo-thumb" 
-                    src={photo.thumb_path || photo.original_path} 
-                    alt="feed attachment" 
-                    loading="lazy"
-                  />
-                  {isVideo && <div className="video-play-overlay">▶</div>}
-                  {selectionMode && (
+                  {photo.thumbPending ? (
+                    <div className="photo-thumb video-thumb-placeholder">
+                      {isVideo ? '🎬' : '🖼️'}
+                    </div>
+                  ) : (
+                    <img 
+                      className="photo-thumb" 
+                      src={photo.thumb_path || photo.original_path} 
+                      alt="feed attachment" 
+                      loading="lazy"
+                    />
+                  )}
+                  {photo.thumbPending && (
+                    <div className="uploading-overlay">
+                      <div className="spinner"></div>
+                    </div>
+                  )}
+                  {!photo.thumbPending && isVideo && <div className="video-play-overlay">▶</div>}
+                  {selectionMode && !photo.thumbPending && (
                     <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
                       {isSelected ? '✓' : ''}
                     </div>
@@ -355,10 +407,16 @@ export default function FeedDetailPage({ feedId, onBack, selectedBand }) {
             {/* Actions */}
             <div className="row" style={{ justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-secondary btn-sm" onClick={closeEdit} disabled={saving || savePending}>Cancel</button>
-              <button className="btn btn-primary btn-sm" onClick={handleSaveEdit} disabled={saving || savePending}>
+              <button className="btn btn-primary btn-sm" onClick={handleSaveEdit} disabled={saving || savePending || !!uploadError}>
                 {saving || savePending ? (savePending || uploadingFiles.length > 0 ? 'Uploading…' : 'Saving…') : 'Save'}
               </button>
             </div>
+            {uploadError && (
+              <div className="upload-error-banner">
+                <span>⚠️ {uploadError}</span>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUploadError('')}>Dismiss</button>
+              </div>
+            )}
           </div>
         </div>
       )}

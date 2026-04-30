@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { getAlbums, getAlbum, createAlbum, getComments, updateAlbum, uploadFile, addAlbumPhoto, deleteAlbumPhoto } from '../api';
 import { usePagination } from '../hooks/usePagination';
+import { useThumbnailPoller } from '../hooks/useThumbnailPoller';
 import BandSelector from '../components/BandSelector';
 import CommentSection from '../components/CommentSection';
 import EditModal from '../components/EditModal';
@@ -73,7 +74,8 @@ function AlbumListView({ selectedBand, onSelectBand }) {
         setStagedPhotos(prev => [...prev, {
           id: result.uniquePhotoId,
           thumb: result.thumbnailUrl || result.originalUrl,
-          isVideo: result.mediaType === 'video'
+          isVideo: result.mediaType === 'video',
+          thumbPending: true
         }]);
       } catch (err) {
         alert('Upload failed');
@@ -83,6 +85,14 @@ function AlbumListView({ selectedBand, onSelectBand }) {
       }
     }
   };
+
+  // Poll staged photos (album creation flow)
+  const handleStagedThumbReady = useCallback((uniquePhotoId, thumbUrl) => {
+    setStagedPhotos(prev => prev.map(p =>
+      p.id === uniquePhotoId ? { ...p, thumb: thumbUrl, thumbPending: false } : p
+    ));
+  }, []);
+  useThumbnailPoller(stagedPhotos, handleStagedThumbReady);
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) uploadPhotos(e.target.files);
@@ -169,11 +179,26 @@ function AlbumListView({ selectedBand, onSelectBand }) {
               <div className="photo-grid" style={{ marginBottom: 4 }}>
                 {stagedPhotos.map((photo) => (
                   <div key={photo.id} className="photo-edit-item">
-                    <img className="photo-thumb" src={photo.thumb} alt="staged" />
-                    {photo.isVideo && <div className="video-play-overlay">▶</div>}
-                    <button 
+                    {photo.thumbPending && (
+                      <div className="photo-thumb video-thumb-placeholder">
+                        {photo.isVideo ? '🎬' : '🖼️'}
+                      </div>
+                    )}
+                    <img
+                      className="photo-thumb"
+                      src={photo.thumb}
+                      alt="staged"
+                      style={photo.thumbPending ? { display: 'none' } : {}}
+                    />
+                    {!photo.thumbPending && photo.isVideo && <div className="video-play-overlay">▶</div>}
+                    {photo.thumbPending && (
+                      <div className="uploading-overlay">
+                        <div className="spinner"></div>
+                      </div>
+                    )}
+                    <button
                       type="button"
-                      className="photo-delete-badge" 
+                      className="photo-delete-badge"
                       onClick={() => setStagedPhotos(prev => prev.filter(p => p.id !== photo.id))}
                     >✕</button>
                   </div>
@@ -345,7 +370,7 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
         const newPhoto = await addAlbumPhoto(albumId, uploadObj.file);
         setAlbum(prev => ({
           ...prev,
-          photos: [...(prev.photos || []), newPhoto],
+          photos: [...(prev.photos || []), { ...newPhoto, thumbPending: true }],
           photo_count: (prev.photo_count || 0) + 1
         }));
       } catch (err) {
@@ -357,6 +382,24 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
       }
     }
   };
+
+  // Poll album detail photos (add-to-album flow)
+  const albumPollable = (album?.photos || [])
+    .filter(p => p.thumbPending && p.unique_photo_id)
+    .map(p => ({ id: p.unique_photo_id, thumbPending: true }));
+
+  const handleAlbumThumbReady = useCallback((uniquePhotoId, thumbUrl) => {
+    setAlbum(prev => ({
+      ...prev,
+      photos: (prev.photos || []).map(p =>
+        p.unique_photo_id === uniquePhotoId
+          ? { ...p, thumb_path: thumbUrl, thumbPending: false }
+          : p
+      )
+    }));
+  }, []);
+
+  useThumbnailPoller(albumPollable, handleAlbumThumbReady);
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -445,6 +488,7 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
                 key={photo.id} 
                 className={`photo-thumb-container ${isSelected ? 'selected' : ''}`}
                 onClick={() => {
+                  if (photo.thumbPending) return;
                   if (selectionMode) {
                     setSelectedPhotoIds(prev => 
                       prev.includes(photo.id) 
@@ -455,16 +499,27 @@ function AlbumDetailView({ albumId, onBack, selectedBand }) {
                     setLightboxIndex(index);
                   }
                 }}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: photo.thumbPending ? 'default' : 'pointer' }}
               >
-                <img 
-                  className="photo-thumb" 
-                  src={photo.thumb_path || photo.original_path} 
-                  alt="album photo" 
-                  loading="lazy"
-                />
-                {isVideo && <div className="video-play-overlay">▶</div>}
-                {selectionMode && (
+                {photo.thumbPending ? (
+                  <div className="photo-thumb video-thumb-placeholder">
+                    {isVideo ? '🎬' : '🖼️'}
+                  </div>
+                ) : (
+                  <img 
+                    className="photo-thumb" 
+                    src={photo.thumb_path || photo.original_path} 
+                    alt="album photo" 
+                    loading="lazy"
+                  />
+                )}
+                {photo.thumbPending && (
+                  <div className="uploading-overlay">
+                    <div className="spinner"></div>
+                  </div>
+                )}
+                {!photo.thumbPending && isVideo && <div className="video-play-overlay">▶</div>}
+                {selectionMode && !photo.thumbPending && (
                   <div className={`selection-badge ${isSelected ? 'active' : ''}`}>
                     {isSelected ? '✓' : ''}
                   </div>

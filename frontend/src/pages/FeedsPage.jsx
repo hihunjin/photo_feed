@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { getBands, getFeeds, getFeedDates, createFeed, uploadFile } from '../api';
 import { usePagination } from '../hooks/usePagination';
+import { useThumbnailPoller } from '../hooks/useThumbnailPoller';
 import FeedCard from '../components/FeedCard';
 import FeedDetailPage from './FeedDetailPage';
 import BandSelector from '../components/BandSelector';
@@ -43,6 +44,7 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
   const [stagedPhotos, setStagedPhotos] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [savePending, setSavePending] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   // Calendar state
   const [showCalendar, setShowCalendar] = useState(false);
@@ -81,22 +83,36 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
     for (const uploadObj of newUploads) {
       try {
         const result = await uploadFile(uploadObj.file);
-        // result should have uniquePhotoId, thumbnailUrl, mediaType, etc.
+        // thumbPending: true for all uploads — worker runs async for both images and videos
         setStagedPhotos(prev => [...prev, {
           id: result.uniquePhotoId,
           thumb: result.thumbnailUrl || result.originalUrl,
           original: result.originalUrl,
-          isVideo: result.mediaType === 'video'
+          isVideo: result.mediaType === 'video',
+          thumbPending: true
         }]);
       } catch (err) {
         console.error('Upload failed', err);
-        alert('Failed to upload file');
+        // Show inline error and cancel any pending save so nothing posts silently
+        const msg = err.message && err.message !== 'Upload failed'
+          ? err.message
+          : `Failed to upload "${uploadObj.file.name}" — file may exceed the 10 GB limit.`;
+        setUploadError(msg);
+        setSavePending(false);
       } finally {
         setUploadingFiles(prev => prev.filter(p => p.id !== uploadObj.id));
         URL.revokeObjectURL(uploadObj.objectUrl);
       }
     }
   };
+
+  // Poll until all staged thumbnails are ready
+  const handleThumbReady = useCallback((uniquePhotoId, thumbUrl) => {
+    setStagedPhotos(prev => prev.map(p =>
+      p.id === uniquePhotoId ? { ...p, thumb: thumbUrl, thumbPending: false } : p
+    ));
+  }, []);
+  useThumbnailPoller(stagedPhotos, handleThumbReady);
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -106,11 +122,12 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
   };
 
   useEffect(() => {
-    if (savePending && uploadingFiles.length === 0) {
+    // Only proceed once all uploads have finished AND none failed
+    if (savePending && uploadingFiles.length === 0 && !uploadError) {
       setSavePending(false);
       performCreate();
     }
-  }, [savePending, uploadingFiles.length]);
+  }, [savePending, uploadingFiles.length, uploadError]);
 
   async function performCreate() {
     setIsSaving(true);
@@ -218,11 +235,30 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
               <div className="photo-grid" style={{ marginBottom: 4 }}>
                 {stagedPhotos.map((photo) => (
                   <div key={photo.id} className="photo-edit-item">
-                    <img className="photo-thumb" src={photo.thumb} alt="staged" />
-                    {photo.isVideo && <div className="video-play-overlay">▶</div>}
-                    <button 
+                    {/* Placeholder shown while thumbnail is being generated */}
+                    {photo.thumbPending && (
+                      <div className="photo-thumb video-thumb-placeholder">
+                        {photo.isVideo ? '🎬' : '🖼️'}
+                      </div>
+                    )}
+                    {/* Real thumbnail — hidden until ready */}
+                    <img
+                      className="photo-thumb"
+                      src={photo.thumb}
+                      alt="staged"
+                      style={photo.thumbPending ? { display: 'none' } : {}}
+                    />
+                    {!photo.thumbPending && photo.isVideo && (
+                      <div className="video-play-overlay">▶</div>
+                    )}
+                    {photo.thumbPending && (
+                      <div className="uploading-overlay">
+                        <div className="spinner"></div>
+                      </div>
+                    )}
+                    <button
                       type="button"
-                      className="photo-delete-badge" 
+                      className="photo-delete-badge"
                       onClick={() => setStagedPhotos(prev => prev.filter(p => p.id !== photo.id))}
                     >✕</button>
                   </div>
@@ -250,7 +286,13 @@ function FeedListView({ user, selectedBand, onSelectBand }) {
                 />
               </div>
               <p className="muted" style={{ margin: 0 }}>Up to 50 photos/videos per feed</p>
-              <button className="btn btn-primary" type="submit" disabled={isSaving}>
+              {uploadError && (
+                <div className="upload-error-banner">
+                  <span>⚠️ {uploadError}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => setUploadError('')}>Dismiss</button>
+                </div>
+              )}
+              <button className="btn btn-primary" type="submit" disabled={isSaving || !!uploadError}>
                 {savePending || (isSaving && uploadingFiles.length > 0) ? 'Uploading…' : (isSaving ? 'Posting…' : 'Post Feed')}
               </button>
             </form>

@@ -335,7 +335,7 @@ async function addFeedPhoto(req, res) {
     );
 
     const photo = await db.query(
-      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type FROM feed_photos WHERE feed_id = ? ORDER BY id DESC LIMIT 1`,
+      `SELECT id, original_path, thumb_path, width, height, sort_order, media_type, unique_photo_id FROM feed_photos WHERE feed_id = ? ORDER BY id DESC LIMIT 1`,
       [feedId]
     );
 

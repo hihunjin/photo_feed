@@ -1,15 +1,11 @@
 const express = require('express');
-const multer = require('multer');
 const router = express.Router({ mergeParams: true });
 const albumController = require('../controllers/albumController');
 const { authMiddleware } = require('../middleware/auth');
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 } // 500MB for videos
-});
+const { diskUpload } = require('../middleware/diskUpload');
 
 router.get('/:bandId/albums', albumController.getAllAlbums);
-router.post('/:bandId/albums', authMiddleware, upload.array('photos', 1000), albumController.createAlbum);
+router.post('/:bandId/albums', authMiddleware, diskUpload.array('photos', 1000), albumController.createAlbum);
 router.get('/detail/:albumId', albumController.getAlbumById);
 router.patch('/:albumId', authMiddleware, albumController.updateAlbum);
 router.delete('/:albumId', authMiddleware, albumController.deleteAlbum);
@@ -25,7 +21,7 @@ albumRouter.delete('/:albumId', authMiddleware, albumController.deleteAlbum);
 albumRouter.post('/:albumId/photos/to-feed', authMiddleware, albumController.copyPhotosToFeed);
 
 // Photo management
-albumRouter.post('/:albumId/photos', authMiddleware, upload.single('photo'), albumController.addAlbumPhoto);
+albumRouter.post('/:albumId/photos', authMiddleware, diskUpload.single('photo'), albumController.addAlbumPhoto);
 albumRouter.delete('/:albumId/photos/:photoId', authMiddleware, albumController.deleteAlbumPhoto);
 
 module.exports = {

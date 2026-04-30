@@ -185,3 +185,7 @@ export async function uploadFile(file) {
   if (!res.ok) throw new Error('Upload failed');
   return res.json();
 }
+
+export function getThumbnailStatus(uniquePhotoId) {
+  return request(`/api/photos/${uniquePhotoId}/thumb-status`);
+}
